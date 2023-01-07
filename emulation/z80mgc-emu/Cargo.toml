@@ -1,0 +1,8 @@
+[package]
+name = "z80mgc-emu"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+iz80 = "0.3.5"
+

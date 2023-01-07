@@ -3,12 +3,46 @@ z80mgc
 
 z80 minimal game console
 
-Emulation
----------
+Display
+-------
 
-It is a copy of the yaze-ag emulator.
+* LCD with HD44780: http://6502.org/mini-projects/optrexlcd/lcd.htm
 
-```
-cp Makefile_linux_64_amd_athlon64 Makefile
+* LCD with ST7920, allows graphics
 
-```
+* LCD with KS0108, allows graphics
+
+* Nokia 5110
+
+  * Parallel to serial
+
+* ILI9163C display
+
+  * Parallel to serial
+
+* Composite video: http://www.cpuville.com/Projects/Standalone-Z80-computer/Standalone-Z80-home.html
+
+  * Shift registers
+
+  * Resistors and transistors
+
+  * Precise clock
+
+  * Precise delay tuning
+
+* SOmething with AD722?
+
+* Yamaha V9958, Yamaha V9938, Yamaha V9959, Yamaha V9990, Motorola 6845, Motorola 6847, TMS9918,
+
+* Text only OSD chips: MAX7456
+
+* Text only: Intel 8275 CRTC together with Intel 8257 DMA controller
+
+* Composite video with a microcontroller?
+
+* Composite video with ICs: https://www.chrismcovell.com/dottorikun.html#schematic
+
+Sound
+-----
+
+* SN76489
