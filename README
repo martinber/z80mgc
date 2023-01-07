@@ -1,0 +1,14 @@
+z80mgc
+======
+
+z80 minimal game console
+
+Emulation
+---------
+
+It is a copy of the yaze-ag emulator.
+
+```
+cp Makefile_linux_64_amd_athlon64 Makefile
+
+```
