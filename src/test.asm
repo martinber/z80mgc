@@ -31,14 +31,9 @@ start:
         ld      (field+1), A
         jp      main_loop
 
-
-#code ROM_NMI, 0x0066
-
+        .org    0x0066
 nmi:
         retn
-
-
-#code ROM_CODE
 
 main_loop:
 ; Head
