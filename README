@@ -3,6 +3,10 @@ z80mgc
 
 z80 minimal game console
 
+```
+~/extra/async/programas/zasm-4.4.10-Linux64/zasm ./../../src/test.asm -l ./../../out/test.lst -o ./../../out/test.bin -uw; cargo run -- ../../out/test.bin
+```
+
 Display
 -------
 

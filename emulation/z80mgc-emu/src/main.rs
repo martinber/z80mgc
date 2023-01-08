@@ -31,28 +31,53 @@ impl Machine for MgcMachine {
     }
 }
 
+fn print_field(machine: &MgcMachine) {
+    let field_mem_location = 0x8000;
+    for y in 0..4 {
+        for x in 0..20 {
+            let val: u8 = machine.mem[field_mem_location+x+y*20];
+            match val {
+                0 => print!(" "),
+                1 => print!("^"),
+                2 => print!("v"),
+                3 => print!("<"),
+                4 => print!(">"),
+                5 => print!("0"),
+                _ => print!("?"),
+            }
+        }
+        print!("\n")
+    }
+    print!("\n")
+}
+
 fn main() {
-   let mut machine = MgcMachine::new();
-   let mut cpu = Cpu::new();
-   cpu.set_trace(true);
+    let mut machine = MgcMachine::new();
+    let mut cpu = Cpu::new();
+    // cpu.set_trace(true);
 
-   let args: Vec<String> = std::env::args().collect();
-   let filename = args.get(1).expect("Give data filename as argument");
-   let data = std::fs::read(filename).expect("Failed to read file");
+    let args: Vec<String> = std::env::args().collect();
+    let filename = args.get(1).expect("Give data filename as argument");
+    let data = std::fs::read(filename).expect("Failed to read file");
 
-   // let code = [0x3c, 0xc3, 0x00, 0x00]; // INC A, JP $0000
-   for (i, byte) in data.iter().enumerate() {
-       machine.poke(i as u16, *byte);
-   }
+    // let code = [0x3c, 0xc3, 0x00, 0x00]; // INC A, JP $0000
+    for (i, byte) in data.iter().enumerate() {
+        machine.poke(i as u16, *byte);
+    }
 
-   // Run emulation
-   cpu.registers().set_pc(0x0000);
-   loop {
-       cpu.execute_instruction(&mut machine);
+    let mut timer = std::time::Instant::now();
 
-       if cpu.is_halted() {
-           break;
-       }
-   }
+    // Run emulation
+    cpu.registers().set_pc(0x0000);
+    loop {
+        cpu.execute_instruction(&mut machine);
+
+        if timer.elapsed().as_millis() > 33 { // 30 FPS
+            timer = std::time::Instant::now();
+            cpu.signal_nmi();
+
+            print_field(&machine);
+        }
+    }
 }
 
