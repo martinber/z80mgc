@@ -36,23 +36,34 @@ impl Machine for MgcMachine {
 }
 
 fn print_field(machine: &MgcMachine) {
+    let mut text: String = String::from("");
+
     let field_mem_location = 0x8000;
     for y in 0..4 {
+        if y > 0 {
+            text.push('\n');
+        }
         for x in 0..20 {
             let val: u8 = machine.mem[field_mem_location+x+y*20];
             match val {
-                0 => print!(" "),
-                1 => print!("^"),
-                2 => print!("v"),
-                3 => print!("<"),
-                4 => print!(">"),
-                5 => print!("0"),
-                _ => print!("?"),
+                0 => text.push(' '),
+                1 => text.push('^'),
+                2 => text.push('v'),
+                3 => text.push('<'),
+                4 => text.push('>'),
+                5 => text.push('0'),
+                _ => text.push('?'),
             }
         }
-        print!("\n")
     }
-    print!("\n")
+
+
+    GUI_STATE.with(move |global| {
+        let mut gui_state = global.borrow_mut();
+        if let Some(s) = gui_state.as_mut() {
+            s.screen.buffer().unwrap().set_text(&text);
+        }
+    });
 }
 
 struct EmulationState {

@@ -50,3 +50,8 @@ Sound
 -----
 
 * SN76489
+
+Timing
+------
+
+* Mouser has Z80 timers
