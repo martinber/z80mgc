@@ -364,8 +364,9 @@ checksum = "2540771e65fc8cb83cd6e8a237f70c319bd5c29f78ed1084ba5d50eeac86f7f9"
 
 [[package]]
 name = "iz80"
-version = "0.3.5"
-source = "git+https://github.com/martinber/iz80#d6219f9c18d1e33570da692fdf0c52df5b26452b"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ce2483eb952e9950fad11989a1cc3bd9a9ed180cff722745881308bcbfd163f"
 
 [[package]]
 name = "libc"
@@ -648,6 +649,7 @@ version = "0.1.0"
 dependencies = [
  "gdk",
  "gio",
+ "glib",
  "gtk",
  "iz80",
 ]

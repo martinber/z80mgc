@@ -4,6 +4,14 @@ STACK_SIZE:     equ     32 ; in bytes
 ; Screen size in characters/tiles
 FIELD_W:        equ     20
 FIELD_H:        equ     4
+; Buttom map.
+; In the hardware, each one of this bits will be set if the button is pressed and an IN instruction
+; is executed
+; The number corresponds to the bit that has to be checked with BIT
+BUTTON_U:       equ     0 ; 0b00000001, Up
+BUTTON_D:       equ     1 ; 0b00000010, Down
+BUTTON_L:       equ     2 ; 0b00000100, Left
+BUTTON_R:       equ     3 ; 0b00001000, Right
 ; Possible tile values
 TILE_EMPTY:     equ     0x00
 TILE_SN_U:      equ     0x01 ; Snake body moving up
@@ -24,48 +32,100 @@ start:
         ld      (sn_head_y), A
         ld      (sn_tail_x), A
         ld      (sn_tail_y), A
-        ld      HL, sn_head_x           ; Move head 1 to the right
+        ld      HL, sn_head_x           ; Move head 4 to the right
+        inc     (HL)
+        inc     (HL)
+        inc     (HL)
         inc     (HL)
         ld      A, TILE_SN_R            ; Write worm to field, pointing right
         ld      (field), A
         ld      (field+1), A
+        ld      (field+2), A
+        ld      (field+3), A
+        ld      (field+4), A
         jp      main_loop
 
         .org    0x0066
 nmi:
         retn
 
+
 main_loop:
-; Head
+; Read input and set direction
+        in      A, 0                    ; Load button states in B
+        ld      B, A
+        bit     BUTTON_U, B             ; Test if button was pressed
+        call    NZ, button_up           ; Change dir if button is pressed
+        bit     BUTTON_D, B
+        call    NZ, button_down
+        bit     BUTTON_L, B
+        call    NZ, button_left
+        bit     BUTTON_R, B
+        call    NZ, button_right
+input_end:
+; Move head
         ld      BC, (sn_head_xy)        ; Get head direction in A
         call    get_tile
         ld      BC, (sn_head_xy)        ; Move head in that direction
         call    move_bc_rel
         ld      (sn_head_xy), BC
-        call    set_tile                ; Set new head tile
-; Tail
+        call    set_tile                ; Set new head tile, A will be the old tile
+
+; Move tail
         ld      A, TILE_EMPTY           ; Delete tail tile, A will be old tile
         ld      BC, (sn_tail_xy)
         call    set_tile
         ld      BC, (sn_tail_xy)        ; Move tail in that direction
         call    move_bc_rel
         ld      (sn_tail_xy), BC
-; If we didnt reach end, go to loop
-        ld      HL, (sn_head_xy)        ; Reset carry flag and see if head is zero
-        ld      BC, 0
-        or      A
-        sbc     HL, BC
-        jr      Z, change_dir
+; Wait for NMI and loop
         halt                            ; Wait for NMI timer
         jr      main_loop
 
 
-; Start moving down
-change_dir:
+; Start moving in a certain direction
+; Args:
+; - A: Direction to move, e.g. TILE_SN_D
+; Affects:
+; - A
+; - BC
+; - DE
+button_up:
+        ld      BC, (sn_head_xy)        ; Load head position
+        call    get_tile                ; Load tile in head
+        cp      TILE_SN_D               ; If we were going down, return
+        ret     Z
+        ld      A, TILE_SN_U
+        ld      BC, (sn_head_xy)        ; Load head position
+        call    set_tile                ; Set new head tile, indicates direction
+        ret
+button_down:
+        ld      BC, (sn_head_xy)
+        call    get_tile
+        cp      TILE_SN_U
+        ret     Z
         ld      A, TILE_SN_D
-        ld      BC, (sn_head_xy)        ; Move head down
-        call    set_tile                ; Set new head tile
-        jr      main_loop
+        ld      BC, (sn_head_xy)
+        call    set_tile
+        ret
+button_left:
+        ld      BC, (sn_head_xy)
+        call    get_tile
+        cp      TILE_SN_R
+        ret     Z
+        ld      A, TILE_SN_L
+        ld      BC, (sn_head_xy)
+        call    set_tile
+        ret
+button_right:
+        ld      BC, (sn_head_xy)
+        call    get_tile
+        cp      TILE_SN_L
+        ret     Z
+        ld      A, TILE_SN_R
+        ld      BC, (sn_head_xy)
+        call    set_tile
+        ret
 
 
 ; Args:

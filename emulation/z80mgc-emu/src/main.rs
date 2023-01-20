@@ -7,14 +7,20 @@ use gtk::prelude::*;
 
 pub struct MgcMachine {
     mem: [u8; 65536],
-    io: [u8; 65536]
+    clicked_up: bool,
+    clicked_down: bool,
+    clicked_left: bool,
+    clicked_right: bool,
 }
 
 impl MgcMachine {
     pub fn new() -> MgcMachine {
         MgcMachine {
             mem: [0; 65536],
-            io: [0; 65536]
+            clicked_up: false,
+            clicked_down: false,
+            clicked_left: false,
+            clicked_right: false,
         }
     }
 }
@@ -27,12 +33,24 @@ impl Machine for MgcMachine {
         self.mem[address as usize] = value;
     }
 
-    fn port_in(&mut self, address: u16) -> u8 {
-        self.io[address as usize]
+    fn port_in(&mut self, _address: u16) -> u8 {
+        let mut out: u8 = 0b00000000;
+        if self.clicked_up {
+            out |= 0b00000001;
+        }
+        if self.clicked_down {
+            out |= 0b00000010;
+        }
+        if self.clicked_left {
+            out |= 0b00000100;
+        }
+        if self.clicked_right {
+            out |= 0b00001000;
+        }
+        return out;
     }
-    fn port_out(&mut self, address: u16, value: u8) {
-        self.io[address as usize] = value;
-    }
+
+    fn port_out(&mut self, _address: u16, _value: u8) { }
 }
 
 fn print_field(machine: &MgcMachine) {
@@ -70,11 +88,6 @@ struct EmulationState {
     machine: MgcMachine,
     cpu: Cpu,
     last_nmi_micros: i64,
-    clicked_up: bool,
-    clicked_down: bool,
-    clicked_left: bool,
-    clicked_right: bool,
-    clicked_reset: bool,
 }
 
 struct GuiState {
@@ -141,7 +154,7 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
     let mut machine = MgcMachine::new();
     let mut cpu = Cpu::new();
     cpu.registers().set_pc(0x0000);
-    cpu.set_trace(true);
+    // cpu.set_trace(true);
 
     let data = std::fs::read(filename).expect("Failed to read file");
 
@@ -155,11 +168,6 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
             machine,
             cpu,
             last_nmi_micros: 0,
-            clicked_up: false,
-            clicked_down: false,
-            clicked_left: false,
-            clicked_right: false,
-            clicked_reset: false,
         })
     });
 
@@ -179,6 +187,8 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
 
     let window_copy = window.clone();
 
+    // Connect all buttons
+
     button_reset.connect_clicked(|_| {
         EMULATION_STATE.with(|global| {
             let mut emulation_state = global.borrow_mut();
@@ -186,6 +196,55 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
                 s.cpu.signal_reset();
             }
         });
+    });
+
+    window.connect("key_press_event", false, |values| {
+        EMULATION_STATE.with(|global| {
+            let mut emulation_state = global.borrow_mut();
+            if let Some(s) = emulation_state.as_mut() {
+                let raw_event = &values[1].get::<gdk::Event>().unwrap();
+                match raw_event.downcast_ref::<gdk::EventKey>() {
+                    Some(event) => {
+                        match *event.keyval() {
+                            65362 => s.machine.clicked_up = true,
+                            65364 => s.machine.clicked_down = true,
+                            65361 => s.machine.clicked_left = true,
+                            65363 => s.machine.clicked_right = true,
+                            _ => {},
+                        }
+                        // println!("key value: {:?}", *event.keyval());
+                    },
+                    None => {},
+                }
+            }
+        });
+
+        let result = glib::value::Value::from_type(glib::types::Type::BOOL);
+        Some(result)
+    });
+
+    window.connect("key_release_event", false, |values| {
+        EMULATION_STATE.with(|global| {
+            let mut emulation_state = global.borrow_mut();
+            if let Some(s) = emulation_state.as_mut() {
+                let raw_event = &values[1].get::<gdk::Event>().unwrap();
+                match raw_event.downcast_ref::<gdk::EventKey>() {
+                    Some(event) => {
+                        match *event.keyval() {
+                            65362 => s.machine.clicked_up = false,
+                            65364 => s.machine.clicked_down = false,
+                            65361 => s.machine.clicked_left = false,
+                            65363 => s.machine.clicked_right = false,
+                            _ => {},
+                        }
+                    },
+                    None => {},
+                }
+            }
+        });
+
+        let result = glib::value::Value::from_type(glib::types::Type::BOOL);
+        Some(result)
     });
 
     // Move widgets to global state
