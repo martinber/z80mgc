@@ -43,6 +43,10 @@ start:
         ld      (field+2), A
         ld      (field+3), A
         ld      (field+4), A
+; Put food
+        ld      A, TILE_FOOD
+        ld      (field+45), A
+        ld      (field+38), A
         jp      main_loop
 
         .org    0x0066
@@ -70,7 +74,13 @@ input_end:
         call    move_bc_rel
         ld      (sn_head_xy), BC
         call    set_tile                ; Set new head tile, A will be the old tile
-
+; Check what the tile was where we put the head
+        cp      TILE_EMPTY
+        jr      Z, move_tail            ; Just move the tail normally
+        cp      TILE_FOOD
+        jr      Z, move_tail_end        ; Dont move the tail, so the sname grows
+        jp      start                   ; Else it was a part of the snake, then reset the game
+move_tail:
 ; Move tail
         ld      A, TILE_EMPTY           ; Delete tail tile, A will be old tile
         ld      BC, (sn_tail_xy)
@@ -78,6 +88,7 @@ input_end:
         ld      BC, (sn_tail_xy)        ; Move tail in that direction
         call    move_bc_rel
         ld      (sn_tail_xy), BC
+move_tail_end:
 ; Wait for NMI and loop
         halt                            ; Wait for NMI timer
         jr      main_loop
