@@ -4,6 +4,11 @@ STACK_SIZE:     equ     32 ; in bytes
 ; Screen size in characters/tiles
 FIELD_W:        equ     20
 FIELD_H:        equ     4
+FIELD_WH:       equ     20*4
+; Mask of bits necessary to represend field size
+FIELD_W_MASK:   equ     0b00011111
+FIELD_H_MASK:   equ     0b00000011
+FIELD_WH_MASK:  equ     0b01111111
 ; Buttom map.
 ; In the hardware, each one of this bits will be set if the button is pressed and an IN instruction
 ; is executed
@@ -24,6 +29,9 @@ TILE_FOOD:      equ     0x05
 #code ROM_CODE, 0x0000
 
 start:
+        ld      A, 255
+        ld      (prng_seed), A          ; This will be updated each time the prng is run
+reset:
         ld      SP, stack+STACK_SIZE
         call    field_clear
 ; Init snake as two horizontal tiles
@@ -43,13 +51,11 @@ start:
         ld      (field+2), A
         ld      (field+3), A
         ld      (field+4), A
-; Put food
-        ld      A, TILE_FOOD
-        ld      (field+45), A
-        ld      (field+38), A
-        jp      main_loop
+        call    put_food                ; Put food
+        jp      main_loop               ; Start game loop
 
-        .org    0x0066
+
+.org    0x0066
 nmi:
         retn
 
@@ -76,11 +82,12 @@ input_end:
         call    set_tile                ; Set new head tile, A will be the old tile
 ; Check what the tile was where we put the head
         cp      TILE_EMPTY
-        jr      Z, move_tail            ; Just move the tail normally
+        jr      Z, _move_tail           ; Just move the tail normally
         cp      TILE_FOOD
-        jr      Z, move_tail_end        ; Dont move the tail, so the sname grows
-        jp      start                   ; Else it was a part of the snake, then reset the game
-move_tail:
+        call    Z, put_food             ; If it was food, put food
+        jr      Z, _move_tail_end       ; If it was food, dont move the tail, so the sname grows
+        jp      reset                   ; Else it was a part of the snake, then reset the game
+_move_tail:
 ; Move tail
         ld      A, TILE_EMPTY           ; Delete tail tile, A will be old tile
         ld      BC, (sn_tail_xy)
@@ -88,7 +95,7 @@ move_tail:
         ld      BC, (sn_tail_xy)        ; Move tail in that direction
         call    move_bc_rel
         ld      (sn_tail_xy), BC
-move_tail_end:
+_move_tail_end:
 ; Wait for NMI and loop
         halt                            ; Wait for NMI timer
         jr      main_loop
@@ -140,6 +147,28 @@ button_right:
 
 
 ; Args:
+; - None
+; Ret:
+; - None
+; Affects:
+; - A
+; - BC
+; - DE
+; - HL
+put_food:
+        call    random_tile             ; Get random offset from (field) in A
+        ld      HL, field               ; Load field addr in HL and sum A
+        ld      B, 0
+        ld      C, A
+        add     HL, BC
+        ld      A, (HL)                 ; Read tile in that position
+        cp      TILE_EMPTY              ; If non empty, retry
+        jr      NZ, put_food
+        ld      (HL), TILE_FOOD         ; Place food in tile
+        ret
+
+
+; Args:
 ; - A: Value
 ; - B: Y position
 ; - C: X position
@@ -149,6 +178,7 @@ button_right:
 ; - A
 ; - BC
 ; - DE
+; - HL
 ; Will calculate A <- field + (sn_head_x) + (sn_head_y) * FIELD_W
 set_tile:
         ld      HL, field               ; Set HL to start of field
@@ -176,8 +206,9 @@ _set_tile_value:
 ; - A: Tile value
 ; Affects:
 ; - A
-; - BC
 ; - DE
+; - BC
+; - HL
 ; Will calculate A <- field + (sn_head_x) + (sn_head_y) * FIELD_W
 get_tile:
         ld      HL, field               ; Set HL to start of field
@@ -222,7 +253,7 @@ _move_bc_rel_up:
 _move_bc_rel_left:
         dec     C                       ; Decrement
         ret     P                       ; Return if still positive
-        ld      B, FIELD_W-1            ; Wrap if it became negative
+        ld      C, FIELD_W-1            ; Wrap if it became negative
         ret
 _move_bc_rel_down:
         inc     B                       ; Increment
@@ -263,6 +294,95 @@ _field_clear_loop:
         inc     A                       ; Count
         jr      _field_clear_loop       ; Loop
 
+
+; Args:
+; - None
+; Ret:
+; - A: Random number from 0 to 255
+; Affects:
+; - DE
+; Modified from https://philpem.me.uk/leeedavison/z80/prng/index.html
+; Looks at tail position to add randomness
+random_byte:
+        ld      A, (prng_seed)          ; Get previous result
+        and     0xB8                    ; Mask non feedback bits
+        scf                             ; Set carry
+        jp      PO, _random_byte_no_clr ; Skip clear if odd
+        ccf                             ; Complement carry (clear it)
+_random_byte_no_clr:
+        ld      A, (prng_seed)          ; Get seed back
+        ld      DE, (sn_tail_xy)        ; Load tail coordinates and add them
+        add     D
+        add     E
+        rl      A                       ; Rotate carry into byte
+        ld      (prng_seed), A          ; Save back for next run
+        ret
+
+
+; Args:
+; - None
+; Ret:
+; - A: Random number from 0 to FIELD_W
+; Affects:
+; - BC
+; random_x:
+;         call    random_byte             ; Get random byte in A
+;         or      FIELD_W_MASK            ; Mask bits as a first approximation to shorten the value
+;         cp      FIELD_W                 ; Check if smaller than field width
+;         ret     C                       ; If smaller than width, return
+;         sub     FIELD_W                 ; Else substract and return
+;         ret
+; random_y:
+;         call    random_byte
+;         or      FIELD_H_MASK
+;         cp      FIELD_H
+;         ret     C
+;         sub     FIELD_H
+;         ret
+
+
+; Args:
+; - None
+; Ret:
+; - H: Random number from 0 to FIELD_H
+; - L: Random number from 0 to FIELD_W
+; Affects:
+; - A
+; - DE
+; random_xy:
+;         call    random_byte             ; Get random byte in A
+;         and     FIELD_W_MASK            ; Mask bits as a first approximation to shorten the value
+;         cp      FIELD_W                 ; Check if smaller than field width
+;         jr      C, _random_xy_save_x    ; If smaller than width, continue
+;         sub     FIELD_W                 ; Else substract FIELD_H
+; _random_xy_save_x:
+;         ld      L, A                    ; Save X in L
+;         call    random_byte             ; Now same for Y
+;         and     FIELD_H_MASK
+;         cp      FIELD_H
+;         jr      C, _random_xy_save_y
+;         sub     FIELD_H
+; _random_xy_save_y:
+;         ld      H, A                    ; Save Y in H
+;         ret
+
+
+; Args:
+; - None
+; Ret:
+; - A: Offset of tile memory location
+; Affects:
+; - DE
+; For now, a byte is enough, but if the field were bigger I should make this 16-bit
+random_tile:
+        call    random_byte             ; Get random byte in A
+        and     FIELD_WH_MASK           ; Mask bits as a first approximation to shorten the value
+        cp      FIELD_WH                ; Check if smaller than field width * height
+        ret     C                       ; If smaller than width * height, return
+        sub     FIELD_WH                ; Else substract size
+        ret
+
+
 ; Characters used to display each thing
 disp_empty:     ds      ' '
 disp_sn_u:      ds      '1'
@@ -280,4 +400,5 @@ sn_head_y:      data    1
 sn_tail_xy:
 sn_tail_x:      data    1
 sn_tail_y:      data    1
+prng_seed:      data    1               ; Has to be set non-zero on startup
 stack:          data    STACK_SIZE

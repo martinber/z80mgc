@@ -136,6 +136,7 @@ fn main_loop(window: &gtk::ApplicationWindow, clock: &gdk::FrameClock) -> Contin
                 }
                 print_field(&s.machine);
                 s.last_nmi_micros = clock.frame_time();
+                println!("------------ NMI -------------");
             }
         } else {
             println!("Machine didnt start yet!");
@@ -154,7 +155,7 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
     let mut machine = MgcMachine::new();
     let mut cpu = Cpu::new();
     cpu.registers().set_pc(0x0000);
-    // cpu.set_trace(true);
+    cpu.set_trace(true);
 
     let data = std::fs::read(filename).expect("Failed to read file");
 
