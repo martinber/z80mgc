@@ -1,12 +1,18 @@
+mod lcd;
+
 use iz80::{Cpu, Machine};
 use std::cell::RefCell;
 use gtk::prelude::*;
+use lcd::MgcLcd;
 // use gio::prelude::*;
 // use gdk::prelude::*;
 
 
+
+
 pub struct MgcMachine {
     mem: [u8; 65536],
+    lcd: MgcLcd,
     clicked_up: bool,
     clicked_down: bool,
     clicked_left: bool,
@@ -17,6 +23,7 @@ impl MgcMachine {
     pub fn new() -> MgcMachine {
         MgcMachine {
             mem: [0; 65536],
+            lcd: MgcLcd::new(),
             clicked_up: false,
             clicked_down: false,
             clicked_left: false,
@@ -33,48 +40,50 @@ impl Machine for MgcMachine {
         self.mem[address as usize] = value;
     }
 
-    fn port_in(&mut self, _address: u16) -> u8 {
-        let mut out: u8 = 0b00000000;
-        if self.clicked_up {
-            out |= 0b00000001;
+    fn port_in(&mut self, address: u16) -> u8 {
+        if (address & 0b0000_0000_1110_0000) == 0b0000_0000_0000_0000
+        {
+            let mut out: u8 = 0b00000000;
+            if self.clicked_up {
+                out |= 0b00000001;
+            }
+            if self.clicked_down {
+                out |= 0b00000010;
+            }
+            if self.clicked_left {
+                out |= 0b00000100;
+            }
+            if self.clicked_right {
+                out |= 0b00001000;
+            }
+            return out;
         }
-        if self.clicked_down {
-            out |= 0b00000010;
+        else if (address & 0b0000_0000_1110_0000) == 0b0000_0000_0010_0000 {
+            return self.lcd.run(
+                address & 0b0001 != 0,
+                address & 0b0010 != 0,
+                0,
+            ).expect("LCD returned None");
+        } else {
+            unreachable!("No devices on this port");
         }
-        if self.clicked_left {
-            out |= 0b00000100;
-        }
-        if self.clicked_right {
-            out |= 0b00001000;
-        }
-        return out;
     }
 
-    fn port_out(&mut self, _address: u16, _value: u8) { }
+    fn port_out(&mut self, address: u16, value: u8) {
+        if (address & 0b0000_0000_1110_0000) == 0b0000_0000_1000_0000 {
+            self.lcd.run(
+                address & 0b0001 != 0,
+                address & 0b0010 != 0,
+                value,
+            );
+        } else {
+            unreachable!("No devices on this port");
+        }
+    }
 }
 
 fn print_field(machine: &MgcMachine) {
-    let mut text: String = String::from("");
-
-    let field_mem_location = 0x8000;
-    for y in 0..4 {
-        if y > 0 {
-            text.push('\n');
-        }
-        for x in 0..20 {
-            let val: u8 = machine.mem[field_mem_location+x+y*20];
-            match val {
-                0 => text.push(' '),
-                1 => text.push('^'),
-                2 => text.push('v'),
-                3 => text.push('<'),
-                4 => text.push('>'),
-                5 => text.push('0'),
-                _ => text.push('?'),
-            }
-        }
-    }
-
+    let text = machine.lcd.display();
 
     GUI_STATE.with(move |global| {
         let mut gui_state = global.borrow_mut();
