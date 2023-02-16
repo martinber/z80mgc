@@ -34,14 +34,14 @@
 #define EEPROM_SIZE 1024
 
 
-//const unsigned char gBinData[] = { 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e };
-//const unsigned int gBinSize = 16;
+// Change name of program to write:
+
 INCBIN(Bin, "/home/mbernardi/documents/repos/other/z80mgc/out/test.bin");
-// This will create global variables:
+
+// This will create global these variables:
 //  const unsigned char gBinData[];              // Pointer to the data
 //  const unsigned char *const gBinEnd;          // Pointer to the end of the data
 //  const unsigned int gBinSize;                 // Size of the data in bytes
-
 
 /*
  * Output the address bits and outputEnable signal using shift registers.

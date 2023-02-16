@@ -1,41 +1,57 @@
-// Only emulates the 8x16 english characters and not the chinese 16x16 chars
+/// Only emulates the 8x16 english characters and not the chinese 16x16 chars
+/// Icon RAM not emulated because I don't even know if that thing exists, documentation is awful
 
-const TEXT_W: usize = 16; /// Number of characters in a row
-const TEXT_H: usize = 4; /// Number of rows of characters
-const CHAR_W: usize = 8; /// Char width in pixels
-const CHAR_H: usize = 16; /// Char height in pixels
-const SCREEN_W: usize = 128; /// Screen width in pixels
-const SCREEN_H: usize = 64; /// Screen height in pixels
+use rand;
 
-// type TextBuffer = [[u8; WIDTH]; HEIGHT];
-// type PxBuffer = [[bool; WIDTH_PX]; HEIGHT_PX];
 
-/// Character Generator RAM. 4x16x16 bits for 8 chars
-type GCRam = [u8; 128];
+/// Number of characters in a row
+const TEXT_W: usize = 16;
+/// Number of rows of characters
+const TEXT_H: usize = 4;
+/// Char width in pixels
+const CHAR_W: usize = 8;
+/// Char height in pixels
+const CHAR_H: usize = 16;
+/// Screen width in pixels
+const SCREEN_W: usize = 128;
+/// Screen height in pixels
+const SCREEN_H: usize = 64;
 
-// DDRAM:
-// - Data codes 0x02-0x7F are for half height alpha numeric fonts
-// - Data codes 0x0000-0x0006 are for CGRAM (2 bytes per char)
-// - Data codes 0xA140-0xD75F are for BIG5 code and 0xA1A0-0xF7FF are for GB code (2 bytes per char)
-/// Display Data RAM: 64 * 2 bytes, but addresses start at 0x80 and not all ram is used
-type DDRam = [u16; 64];
+/// Character Generator RAM. 4 * 16 * 16 bits for 8 double width chars of 16x16px
+type CGRam = [u8; CGRAM_LENGTH];
+const CGRAM_LENGTH: usize = 128;
+                                                              //
+/// Display Data RAM: 8 * 4 * 2 words of 16 bits. Each word represents two english characters or one
+/// CGRAM character. 2 banks of 4 rows by 8 columns (where each column is two english characters).
+/// Actually I say "2 banks" but there is no division within banks, you can scroll and display half
+/// of each for example.
+/// - Data codes 0x02-0x7F are for english chars
+/// - Data codes 0x0000, 0x0002, 0x0004 and 0x0006 are for CGRAM. Must write 2 bytes per char, where
+///   first byte is always 0x00. The full double width 16x16 char will be drawn at once
+/// - Data codes 0xA140-0xD75F are for BIG5 code and 0xA1A0-0xF7FF are for GB code (2 bytes per char,
+///   for chinese characters and not emulated)
+type DDRam = [u16; DDRAM_LENGTH];
+const DDRAM_LENGTH: usize = 64;
+/// Address of each DDRAM line. First 4 are on first bank and the other 4 on second bank
+const CGRAM_LINE_ADDR: [usize; 8] = [0x00, 0x10, 0x08, 0x18, 0x20, 0x30, 0x28, 0x38];
 
-/// Graphic RAM: 64 * 256 bits
-type GRam = [u8; 2048];
-
-/// Icon RAM: 15 * 16 bits
-type IRam = [u8; 30];
+/// Graphic RAM: 128 * 64 * 2 bits, for two banks of 128x64px graphics
+/// Actually I say "2 banks" but there is no division within banks, you can scroll and display half
+/// of each for example.
+type GRam = [u8; GRAM_LENGTH];
+const GRAM_LENGTH: usize = 64;
 
 /// Indicates where the next write/read instruction will operate
 enum Memory {
     CGRam,
     DDRam,
     GRam,
-    IRam,
 }
 
 pub struct MgcLcd {
+    cgram: CGRam,
     ddram: DDRam,
+    gram: GRam,
 
     /// RE bit according to documentation. true if using extended instruction set
     extended_instr: bool,
@@ -52,6 +68,7 @@ pub struct MgcLcd {
     display_on: bool,
     cursor_on: bool,
     blink_on: bool,
+    graphic_on: bool,
 
     /// True if using 8bit interface or false for 4bit
     parallel_8: bool,
@@ -68,33 +85,41 @@ pub struct MgcLcd {
 
 impl MgcLcd {
     pub fn new() -> MgcLcd {
-        MgcLcd {
-            ddram: [0x2020; 64],
+        let mut lcd = MgcLcd {
+            cgram: [0x00; CGRAM_LENGTH],
+            ddram: [0x2020; DDRAM_LENGTH],
+            gram: [0x00; GRAM_LENGTH],
             extended_instr: false,
             address_counter: 0,
             direction_right: true,
             shift_on: false,
-            display_on: true,
+            display_on: false,
             cursor_on: false,
             blink_on: false,
+            graphic_on: false,
             parallel_8: true,
             curr_memory: Memory::DDRam,
             dummy_read_necessary: false,
             second_rw: false,
+        };
+        // On my LCD, I observed that GRAM has random stuff when turned on
+        for byte in lcd.gram.iter_mut() {
+            *byte = rand::random::<u8>();
         }
+
+        return lcd;
     }
 
     pub fn display(&self) -> String {
         let mut text: String = String::from("");
 
-        let addresses: [usize; 4] = [0x00, 0x10, 0x08, 0x18]; // Addreess of each line
-
+        // TODO: Handle second bank correctly
         for y in 0..4 {
             if y > 0 {
                 text.push('\n');
             }
             for x in 0..8 {
-                let word: u16 = self.ddram[addresses[y] + x];
+                let word: u16 = self.ddram[CGRAM_LINE_ADDR[y] + x];
                 text.push(char::from_u32(((word & 0xFF00) >> 8) as u32).unwrap());
                 text.push(char::from_u32((word & 0x00FF) as u32).unwrap());
             }
@@ -103,7 +128,10 @@ impl MgcLcd {
         return text;
     }
 
-    /// rw is 0 for writing
+    /// Send command or data to LCD.
+    ///
+    /// Which means, emulate what happens when enabling the LCD.
+    /// Pin RW set to 0 is for writing, and pin RS set to 0 is for instructions.
     pub fn run(&mut self, rs: bool, rw: bool, data: u8) -> Option<u8> {
 
         match (self.extended_instr, rs, rw) {
@@ -143,11 +171,17 @@ impl MgcLcd {
                     }
                 } else if (data & 0b1110_0000) == 0b0010_0000 {
                     // Set extended mode
-                    self.parallel_8 = data & 0b0001_0000 != 0;
-                    if !self.parallel_8 {
-                        unimplemented!("4bit interface");
+                    let new_mode: bool = data & 0b0000_0100 != 0;
+                    if new_mode != self.extended_instr {
+                        // Change mode and do nothing else
+                        self.extended_instr = new_mode;
+                    } else {
+                        // Set other values
+                        self.parallel_8 = data & 0b0001_0000 != 0;
+                        if !self.parallel_8 {
+                            unimplemented!("4bit interface");
+                        }
                     }
-                    self.extended_instr = data & 0b0000_0100 != 0;
                 } else if (data & 0b1100_0000) == 0b0100_0000 {
                     // Set CGRAM address
                     // Not sure if modifies address_counter or if it is another address variable
@@ -173,12 +207,71 @@ impl MgcLcd {
 
                 return None;
             },
+            (true, false, false) => { // Extended instruction set, write instructions
+
+                if data == 0b0000_0001 {
+                    // Stand by
+                    unimplemented!("Stand by");
+                } else if (data & 0b1111_1110) == 0b0000_0010 {
+                    // Vertical scroll position
+                    unimplemented!("Vertical scroll position");
+                } else if (data & 0b1111_1100) == 0b0000_0100 {
+                    // Reverse
+                    unimplemented!("Reverse line");
+                } else if (data & 0b1111_1000) == 0b0000_1000 {
+                    // Display on/off, same as basic instruction set?
+                    self.display_on = data & 0b0000_0100 != 0;
+                    self.cursor_on = data & 0b0000_0010 != 0;
+                    self.blink_on = data & 0b0000_0001 != 0;
+                    print!("Warning, not sure if this LCD instruction exists");
+                } else if (data & 0b1111_0000) == 0b0001_0000 {
+                    // Move cursor and shift
+                    let move_right = data & 0b0000_0100 != 0;
+                    let shift_display = data & 0b0000_1000 != 0;
+                    if shift_display {
+                        unimplemented!("Shift display and move cursor to follow shift")
+                    } else {
+                        if move_right {
+                            self.address_counter = self.address_counter.wrapping_add(1);
+                        } else {
+                            self.address_counter = self.address_counter.wrapping_sub(1);
+                        }
+                    }
+                    print!("Warning, not sure if this LCD instruction exists");
+                } else if (data & 0b1110_0000) == 0b0010_0000 {
+                    // Set extended mode
+                    let new_mode: bool = data & 0b0000_0100 != 0;
+                    if new_mode != self.extended_instr {
+                        // Change mode and do nothing else
+                        self.extended_instr = new_mode;
+                    } else {
+                        // Set other values
+                        self.parallel_8 = data & 0b0001_0000 != 0;
+                        self.graphic_on = data & 0b0000_0010 != 0;
+                        if !self.parallel_8 {
+                            unimplemented!("4bit interface");
+                        }
+                    }
+                } else if (data & 0b1100_0000) == 0b0100_0000 {
+                    unimplemented!("s_address");
+                } else if (data & 0b1000_0000) == 0b1000_0000 {
+                    // Set GDRAM address
+                    unimplemented!("GDRAM address");
+                }
+
+                return None;
+            },
             (false, false, true) => { // Standard instruction set, read instruction
                 let result = self.address_counter;
                 // Not setting the BUSY flag
                 return Some(result as u8);
             },
-            (false, true, false) => { // Standard instruction set, write data
+            (true, false, true) => { // Extended instruction set, read instruction
+                let result = self.address_counter;
+                // Not setting the BUSY flag
+                return Some(result as u8);
+            },
+            (_, true, false) => { // Any instruction set, write data
                 let mut word: u16 = match self.curr_memory {
                     Memory::DDRam => self.ddram[self.address_counter],
                     _ => unimplemented!("Reading other memories"),
@@ -216,7 +309,7 @@ impl MgcLcd {
 
                 return None;
             },
-            (true, true, false) => { // Standard instruction set, read data
+            (_, true, true) => { // Any instruction set, read data
 
                 let word: u16 = match self.curr_memory {
                     Memory::DDRam => self.ddram[self.address_counter],
@@ -239,7 +332,6 @@ impl MgcLcd {
 
                 return Some(result);
             }
-            _ => unimplemented!("Other match mases"),
         }
     }
 }

@@ -17,30 +17,13 @@ BUTTON_U:       equ     0 ; 0b00000001, Up
 BUTTON_D:       equ     1 ; 0b00000010, Down
 BUTTON_L:       equ     2 ; 0b00000100, Left
 BUTTON_R:       equ     3 ; 0b00001000, Right
-; Possible tile values
+; Possible tile values written to RAM, they are also the 
 TILE_EMPTY:     equ     0x00
 TILE_SN_U:      equ     0x01 ; Snake body moving up
 TILE_SN_D:      equ     0x02
 TILE_SN_L:      equ     0x03
 TILE_SN_R:      equ     0x04
 TILE_FOOD:      equ     0x05
-
-; Contents of address bus to send commands or read/write LCD memory
-; Bits: (b7,b6,b5) = port, b1 = RW (read), b0: DI (memory)
-LCD_W_CMD:      equ     0b10000000
-LCD_R_CMD:      equ     0b10000010
-LCD_W_MEM:      equ     0b10000001
-LCD_R_MEM:      equ     0b10000011
-
-; LCD commands. Only sets the first bit, OR should be used to set settings
-LCD_CLR:        equ     0b00000001 ; Clear
-LCD_HOME:       equ     0b00000010 ; Move address counter to 0
-LCD_DIR:        equ     0b00000100 ; Change text direction or enable screen shift
-LCD_DISP:       equ     0b00001000 ; Display and cursor on/off
-LCD_MV:         equ     0b00010000 ; Move cursor and shift display
-LCD_EXT:        equ     0b00100000 ; Enable extended mode
-LCD_CG_ADDR:    equ     0b01000000 ; Set CGRAM address
-LCD_DD_ADDR:    equ     0b10000000 ; Set DDRAM address
 
 
 #code ROM_CODE, 0x0000
@@ -50,19 +33,6 @@ start:
         ld      (prng_seed), A          ; This will be updated each time the prng is run
 reset:
         ld      SP, stack+STACK_SIZE
-
-        ld      A, LCD_DD_ADDR || 0x00
-        out     LCD_W_CMD, A
-_display:
-        ld      A, 0x30
-        out     LCD_W_MEM, A
-        ld      A, 0x31
-        out     LCD_W_MEM, A
-        halt
-        jp      _display
-_display_end:
-
-
         call    field_clear
 ; Init snake as two horizontal tiles
         ld      A, 0                    ; Set head and tail positions to 0

@@ -31,6 +31,30 @@
           </packing>
         </child>
         <child>
+          <object class="GtkAspectFrame">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="hexpand">True</property>
+            <property name="vexpand">True</property>
+            <property name="label-xalign">0</property>
+            <property name="ratio">2</property>
+            <property name="obey-child">False</property>
+            <child>
+              <object class="GtkDrawingArea" id="canvas">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+        <child>
           <!-- n-columns=5 n-rows=3 -->
           <object class="GtkGrid">
             <property name="visible">True</property>
@@ -156,7 +180,7 @@
           <packing>
             <property name="expand">False</property>
             <property name="fill">True</property>
-            <property name="position">1</property>
+            <property name="position">2</property>
           </packing>
         </child>
       </object>
