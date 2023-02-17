@@ -10,39 +10,26 @@ fn print_field(
     canvas: &gtk::DrawingArea,
     context: &gtk::cairo::Context
 ) {
-    // let text = machine.lcd.display();
+    let mut screen: [bool; 128 * 64] = [false; 128 * 64];
+    machine.lcd.draw(&mut screen);
 
-    // GUI_STATE.with(move |global| {
-    //     let mut gui_state = global.borrow_mut();
-    //     if let Some(s) = gui_state.as_mut() {
-            // s.screen.buffer().unwrap().set_text(&text);
+    let canvas_w: f64 = canvas.allocated_width().into();
+    let canvas_h: f64 = canvas.allocated_height().into();
 
-            let canvas_w: f64 = canvas.allocated_width().into();
-            let canvas_h: f64 = canvas.allocated_height().into();
-
-            // for _i in 0..128*64 {
-                context.rectangle(canvas_w/4., canvas_h/4., canvas_w/2., canvas_h/2.);
-                context.set_source_rgba(0., 0., 0., 1.);
-                context.fill().unwrap();
-            // }
-            //
-            // let context = cairo::Context::new(&surface);
-            //
-            // gtk_render_background (context, cr, 0, 0, width, height);
-            //
-            // cairo_arc (cr,
-            //     width / 2.0, height / 2.0,
-            //     MIN (width, height) / 2.0,
-            //     0, 2 * G_PI);
-            //
-            // gtk_style_context_get_color (context,
-            //     gtk_style_context_get_state (context),
-            //     &color);
-            // gdk_cairo_set_source_rgba (cr, &color);
-            //
-            // cairo_fill (cr);
-        // }
-    // });
+    let pixbuf = gdk_pixbuf::Pixbuf::new(
+        gdk_pixbuf::Colorspace::Rgb, false, 8, 128, 64
+    ).unwrap();
+    pixbuf.fill(0);
+    for x in 0..128 {
+        for y in 0..64 {
+            if screen[x + y * 128] {
+                pixbuf.put_pixel(x as u32, y as u32, 255, 255, 255, 255);
+            }
+        }
+    }
+    context.scale(8., 8.);
+    context.set_source_pixbuf(&pixbuf, 0f64, 0f64);
+    context.paint().unwrap();
 }
 
 struct EmulationState {

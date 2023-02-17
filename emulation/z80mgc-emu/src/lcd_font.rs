@@ -1,4 +1,4 @@
-const LCD_FONT: [[u8; 16]; 128] =
+pub const LCD_FONT: [[u8; 16]; 128] =
 [
     [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // First char 0x00 is not used

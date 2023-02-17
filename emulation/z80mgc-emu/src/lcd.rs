@@ -2,6 +2,7 @@
 /// Icon RAM not emulated because I don't even know if that thing exists, documentation is awful
 
 use rand;
+use crate::lcd_font::LCD_FONT;
 
 
 /// Number of characters in a row
@@ -33,13 +34,16 @@ const CGRAM_LENGTH: usize = 128;
 type DDRam = [u16; DDRAM_LENGTH];
 const DDRAM_LENGTH: usize = 64;
 /// Address of each DDRAM line. First 4 are on first bank and the other 4 on second bank
-const CGRAM_LINE_ADDR: [usize; 8] = [0x00, 0x10, 0x08, 0x18, 0x20, 0x30, 0x28, 0x38];
+const DDRAM_LINE_ADDR: [usize; 8] = [0x00, 0x10, 0x08, 0x18, 0x20, 0x30, 0x28, 0x38];
 
 /// Graphic RAM: 128 * 64 * 2 bits, for two banks of 128x64px graphics
 /// Actually I say "2 banks" but there is no division within banks, you can scroll and display half
 /// of each for example.
 type GRam = [u8; GRAM_LENGTH];
 const GRAM_LENGTH: usize = 64;
+
+/// Rendered screen: 128x64 pixels
+type Screen = [bool; SCREEN_W * SCREEN_H];
 
 /// Indicates where the next write/read instruction will operate
 enum Memory {
@@ -110,22 +114,49 @@ impl MgcLcd {
         return lcd;
     }
 
-    pub fn display(&self) -> String {
-        let mut text: String = String::from("");
+    pub fn draw(&self, screen: &mut Screen) {
+        for x in 0..TEXT_W {
+            for y in 0..TEXT_H {
 
-        // TODO: Handle second bank correctly
-        for y in 0..4 {
-            if y > 0 {
-                text.push('\n');
-            }
-            for x in 0..8 {
-                let word: u16 = self.ddram[CGRAM_LINE_ADDR[y] + x];
-                text.push(char::from_u32(((word & 0xFF00) >> 8) as u32).unwrap());
-                text.push(char::from_u32((word & 0x00FF) as u32).unwrap());
+                print!("{:?}", self.ddram);
+
+                let ddram_addr: usize = DDRAM_LINE_ADDR[y] + x / 2;
+                let ddram_byte = match x % 2 {
+                    0 => (self.ddram[ddram_addr] & 0xFF00) >> 8,
+                    1 => self.ddram[ddram_addr] & 0x00FF,
+                    _ => unreachable!(),
+                };
+                // let ddram_word: u8 = self.ddram[(DDRAM_LINE_ADDR[y] + x) as usize]
+                // let character: usize = self.ddram[(DDRAM_LINE_ADDR[y] + x) as usize] as usize;
+
+                for char_px_x in 0..CHAR_W {
+                    for char_px_y in 0..CHAR_H {
+                        let screen_px_x = x * CHAR_W + char_px_x;
+                        let screen_px_y = y * CHAR_H + char_px_y;
+                        screen[screen_px_x + screen_px_y * SCREEN_W]
+                            = LCD_FONT[ddram_byte as usize][char_px_y] & (0b10000000 >> char_px_x) != 0;
+                    }
+                }
+
+
             }
         }
 
-        return text;
+
+
+        // let mut text: String = String::from("");
+        //
+        // // TODO: Handle second bank correctly
+        // for y in 0..4 {
+        //     if y > 0 {
+        //         text.push('\n');
+        //     }
+        //     for x in 0..8 {
+        //         let word: u16 = self.ddram[CGRAM_LINE_ADDR[y] + x];
+        //         text.push(char::from_u32(((word & 0xFF00) >> 8) as u32).unwrap());
+        //         text.push(char::from_u32((word & 0x00FF) as u32).unwrap());
+        //     }
+        // }
     }
 
     /// Send command or data to LCD.
@@ -197,6 +228,7 @@ impl MgcLcd {
                     self.address_counter = (data & 0b0011_1111) as usize;
                     self.curr_memory = Memory::DDRam;
                     self.dummy_read_necessary = true;
+                    self.second_rw = false;
                     assert!(
                         (0x00 <= self.address_counter && self.address_counter <= 0x07) // Line 1
                         || (0x10 <= self.address_counter && self.address_counter <= 0x17) // Line 2

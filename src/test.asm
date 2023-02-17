@@ -79,8 +79,8 @@ LCD_EI_GD_ADDR:     equ     0b10000000 ; Set GDRAM address, should OR the addres
 
 ; Constants
 LCD_DD_ADDR_L1:     equ     0x00       ; First line DDRAM address
-LCD_DD_ADDR_L2:     equ     0x08       ; Second line DDRAM address
-LCD_DD_ADDR_L3:     equ     0x10       ; Third line DDRAM address
+LCD_DD_ADDR_L2:     equ     0x10       ; Second line DDRAM address
+LCD_DD_ADDR_L3:     equ     0x08       ; Third line DDRAM address
 LCD_DD_ADDR_L4:     equ     0x18       ; Fourth line DDRAM address
 
 ; When using second scroll bank for double buffering, first line is at 0x20 instead of 0x00
@@ -119,7 +119,7 @@ lcd_init:
         ld      A, '1'
         out     LCD_W_MEM, A
 
-        ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L1
+        ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L3
         out     LCD_W_INSTR, A
         ld      A, 'L'
         out     LCD_W_MEM, A
@@ -133,53 +133,53 @@ lcd_init:
         out     LCD_W_MEM, A
 
 ; Write graphics
-        ld      A, LCD_EI_SET_8_E_G     ; Twice because first only sets extended mode
-        out     LCD_W_INSTR, A
-        ld      A, LCD_EI_SET_8_E_G
-        out     LCD_W_INSTR, A
-
-        ld      B, LCD_EI_GD_ADDR | 0x00    ; Y address, until 63
-        ld      C, 0x00                     ; Graphic
-
-_display_loop:
-        ld      A, B
-        out     LCD_W_INSTR, A              ; Y address = B
-        ld      A, LCD_EI_GD_ADDR | 0x00
-        out     LCD_W_INSTR, A              ; X address = 0
-
-        ld      A, C
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-        out     LCD_W_MEM, A
-
-        inc     C
-        inc     B
-        ld      A, B
-        cp      62
-        jp      NZ, _display_loop
-
-; Test scroll
-        ld      A, LCD_EI_SET_8_E_G
-        out     LCD_W_INSTR, A
-
-        ld      A, LCD_EI_VSCR
-        out     LCD_W_INSTR, A
-
-        ld      A, LCD_EI_VSCR_A | 0x04     ; Scroll half a line
-        out     LCD_W_INSTR, A
+;         ld      A, LCD_EI_SET_8_E_G     ; Twice because first only sets extended mode
+;         out     LCD_W_INSTR, A
+;         ld      A, LCD_EI_SET_8_E_G
+;         out     LCD_W_INSTR, A
+;
+;         ld      B, LCD_EI_GD_ADDR | 0x00    ; Y address, until 63
+;         ld      C, 0x00                     ; Graphic
+;
+; _display_loop:
+;         ld      A, B
+;         out     LCD_W_INSTR, A              ; Y address = B
+;         ld      A, LCD_EI_GD_ADDR | 0x00
+;         out     LCD_W_INSTR, A              ; X address = 0
+;
+;         ld      A, C
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;         out     LCD_W_MEM, A
+;
+;         inc     C
+;         inc     B
+;         ld      A, B
+;         cp      62
+;         jp      NZ, _display_loop
+;
+; ; Test scroll
+;         ld      A, LCD_EI_SET_8_E_G
+;         out     LCD_W_INSTR, A
+;
+;         ld      A, LCD_EI_VSCR
+;         out     LCD_W_INSTR, A
+;
+;         ld      A, LCD_EI_VSCR_A | 0x04     ; Scroll half a line
+;         out     LCD_W_INSTR, A
 
 _halt:
         halt
