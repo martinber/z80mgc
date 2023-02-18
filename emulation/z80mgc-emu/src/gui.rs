@@ -13,12 +13,13 @@ fn print_field(
     let mut screen: [bool; 128 * 64] = [false; 128 * 64];
     machine.lcd.draw(&mut screen);
 
-    let canvas_w: f64 = canvas.allocated_width().into();
-    let canvas_h: f64 = canvas.allocated_height().into();
+    let canvas_w: i32 = canvas.allocated_width();
+    let canvas_h: i32 = canvas.allocated_height();
 
     let pixbuf = gdk_pixbuf::Pixbuf::new(
         gdk_pixbuf::Colorspace::Rgb, false, 8, 128, 64
     ).unwrap();
+
     pixbuf.fill(0);
     for x in 0..128 {
         for y in 0..64 {
@@ -27,8 +28,12 @@ fn print_field(
             }
         }
     }
-    context.scale(8., 8.);
-    context.set_source_pixbuf(&pixbuf, 0f64, 0f64);
+
+    let pixbuf_scaled = pixbuf.scale_simple(
+        canvas_w, canvas_h, gdk_pixbuf::InterpType::Nearest
+    ).unwrap();
+
+    context.set_source_pixbuf(&pixbuf_scaled, 0f64, 0f64);
     context.paint().unwrap();
 }
 
