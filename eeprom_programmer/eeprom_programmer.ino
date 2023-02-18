@@ -36,7 +36,7 @@
 
 // Change name of program to write:
 
-INCBIN(Bin, "/home/mbernardi/documents/repos/other/z80mgc/out/test.bin");
+INCBIN(Bin, "/home/mbernardi/documents/repos/other/z80mgc/out/snake.bin");
 
 // This will create global these variables:
 //  const unsigned char gBinData[];              // Pointer to the data

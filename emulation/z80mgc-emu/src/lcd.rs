@@ -118,8 +118,6 @@ impl MgcLcd {
         for x in 0..TEXT_W {
             for y in 0..TEXT_H {
 
-                print!("{:?}", self.ddram);
-
                 let ddram_addr: usize = DDRAM_LINE_ADDR[y] + x / 2;
                 let ddram_byte = match x % 2 {
                     0 => (self.ddram[ddram_addr] & 0xFF00) >> 8,

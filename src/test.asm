@@ -90,47 +90,91 @@ LCD_DD_ADDR_B2:     equ     0x20
 #code ROM_CODE, 0x0000
 
 start:
-        jp      lcd_init
+        jp      run_tests
 
 
 .org    0x0066
 nmi:
         nop
         nop
-        jp      lcd_init
+        jp      run_tests
 
-lcd_init:
-        ld      A, LCD_BI_SET_8_B       ; Init
+run_tests:
+
+;;;;;;;;;;;;;;; Test LCD text
+
+; Init
+        ld      A, LCD_BI_SET_8_B
+        out     LCD_W_INSTR, A
+        ld      A, LCD_BI_CLR
         out     LCD_W_INSTR, A
         ld      A, LCD_BI_ON
         out     LCD_W_INSTR, A
-
 ; Write line 1
         ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L1
         out     LCD_W_INSTR, A
         ld      A, 'L'
         out     LCD_W_MEM, A
-        ld      A, 'i'
+        ld      A, 'C'
         out     LCD_W_MEM, A
-        ld      A, 'n'
+        ld      A, 'D'
         out     LCD_W_MEM, A
-        ld      A, 'e'
-        out     LCD_W_MEM, A
-        ld      A, '1'
-        out     LCD_W_MEM, A
-
+; Write line 3
         ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L3
         out     LCD_W_INSTR, A
-        ld      A, 'L'
+        ld      A, 'W'
         out     LCD_W_MEM, A
-        ld      A, 'i'
+        ld      A, 'o'
         out     LCD_W_MEM, A
-        ld      A, 'n'
+        ld      A, 'r'
         out     LCD_W_MEM, A
-        ld      A, 'e'
+        ld      A, 'k'
         out     LCD_W_MEM, A
-        ld      A, '3'
+        ld      A, 's'
         out     LCD_W_MEM, A
+
+;;;;;;;;;;;;;;; Test RAM and LCD text
+
+; Init
+        ld      A, LCD_BI_SET_8_B
+        out     LCD_W_INSTR, A
+        ld      A, LCD_BI_CLR
+        out     LCD_W_INSTR, A
+        ld      A, LCD_BI_ON
+        out     LCD_W_INSTR, A
+; Write to RAM, read and write it to LCD
+        ld      A, 'R'
+        ld      (ram_test), A
+        ld      A, 'A'
+        ld      (ram_test+1), A
+        ld      A, 'M'
+        ld      (ram_test+2), A
+        ld      A, ' '
+        ld      (ram_test+3), A
+        ld      A, 'O'
+        ld      (ram_test+4), A
+        ld      A, 'K'
+        ld      (ram_test+5), A
+
+        ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L1
+        out     LCD_W_INSTR, A
+
+        ld      A, (ram_test)
+        out     LCD_W_MEM, A
+        ld      A, (ram_test+1)
+        out     LCD_W_MEM, A
+        ld      A, (ram_test+2)
+        out     LCD_W_MEM, A
+        ld      A, (ram_test+3)
+        out     LCD_W_MEM, A
+        ld      A, (ram_test+4)
+        out     LCD_W_MEM, A
+        ld      A, (ram_test+5)
+        out     LCD_W_MEM, A
+
+        halt
+
+;;;;;;;;;;;;;;; Test LCD graphics
 
 ; Write graphics
 ;         ld      A, LCD_EI_SET_8_E_G     ; Twice because first only sets extended mode
@@ -181,12 +225,8 @@ lcd_init:
 ;         ld      A, LCD_EI_VSCR_A | 0x04     ; Scroll half a line
 ;         out     LCD_W_INSTR, A
 
-_halt:
-        halt
-        jp      _halt
-
 
 #data RAM_DATA, 0x8000
 
-ram_test:       data    1
+ram_test:       data    8
 stack:          data    STACK_SIZE
