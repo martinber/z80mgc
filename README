@@ -7,8 +7,27 @@ z80 minimal game console
 ~/extra/async/programas/zasm-4.4.10-Linux64/zasm ./../../src/test.asm -l ./../../out/test.lst -o ./../../out/test.bin -uw; cargo run -- ../../out/test.bin
 ```
 
-Display
--------
+Clock speed
+-----------
+
+- RAM is 71256 SA25TPG. Therefore is 25ns access time: Data is valid 25ns after OE and CS are set.
+- RAM is 28C64 25P. Therefore I think it is 250ns access time: Data is valid 250ns after OE and CS are set.
+- CPU is Z84C0006TPG. Therefore is 6.17MHz, equivalent to 166ns per clock. It waits memory for 2
+  clock cycles (this time is shortened a bit because of the logic gates I use to select memory).
+- LCD takes 1.6ms for clearing and 72 µs (72000ns) for each of the other instructions. So I can do
+  around 13800 instructions per second. When writing make the E pulse at least 160ns long (CPU does
+  this for around 2 clock cycles) and leave the data for 20ns after disabling (CPU does this for
+  around half a clock cycle). When reading, data is valid 260ns after enabled (CPU waits for around
+  2 clock cycles)
+- Logic gates have around 10ns propagation time.
+- The nake game was doing around 150 instructions per game loop. If I consider 4 clocks per
+  instruction, I can run it at 60fps if the clock is at around 36kHz?
+
+So apparently I can run at full clock speed, where I would be close to reaching the limit of LCD
+read times. I have to wait LCD after each instruction.
+
+Other display options
+---------------------
 
 * LCD with HD44780: http://6502.org/mini-projects/optrexlcd/lcd.htm
 

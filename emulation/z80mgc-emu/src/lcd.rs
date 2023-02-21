@@ -285,8 +285,8 @@ impl MgcLcd {
                 } else if (data & 0b1100_0000) == 0b0100_0000 {
                     unimplemented!("s_address");
                 } else if (data & 0b1000_0000) == 0b1000_0000 {
-                    // Set GDRAM address
-                    unimplemented!("GDRAM address");
+                    // Set GRAM address
+                    unimplemented!("GRAM address");
                 }
 
                 return None;
