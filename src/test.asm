@@ -92,44 +92,49 @@ run_tests:
 
 ;;;;;;;;;;;;;;; Test LCD graphics
 
-; Write graphics
-        ld      A, LCD_EI_SET_8_E_G     ; Twice because first only sets extended mode
+; Init graphics
+
+        ld      A, LCD_EI_SET_8_E_G         ; Twice because first only sets extended mode
         out     IO_LCD_W_INSTR, A
         ld      A, LCD_EI_SET_8_E_G
         out     IO_LCD_W_INSTR, A
 
-        ld      B, LCD_EI_GD_ADDR | 0x00    ; Y address, until 63
-        ld      C, 0x00                     ; Graphic
+; Clear graphics
 
-_display_loop:
-        ld      A, B
-        out     IO_LCD_W_INSTR, A              ; Y address = B
-        ld      A, LCD_EI_GD_ADDR | 0x00
-        out     IO_LCD_W_INSTR, A              ; X address = 0
+        ld      E, 63                       ; Y
+clear_loop_ver:
+        ld      B, 16                        ; Counter for X
+        ld      A, E                        ; Set Y
+        or      A, LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        ld      A, LCD_EI_GD_ADDR | 0       ; Set X to zero
+        out     IO_LCD_W_INSTR, A
+        ld      A, 0                        ; Data
+clear_loop_hor:
+        out     IO_LCD_W_MEM, A
+        djnz    clear_loop_hor              ; Decrement B and jump if not zero
 
-        ld      A, C
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
-        out     IO_LCD_W_MEM, A
+        dec     E                           ; Decrement Y and jump if still positive
+        jp      P, clear_loop_ver
 
-        inc     C
-        inc     B
-        ld      A, B
-        cp      LCD_EI_GD_ADDR | 64
-        jp      NZ, _display_loop
+; Write graphics
+
+        ld      D, LCD_EI_GD_ADDR | 1       ; X
+        ld      E, LCD_EI_GD_ADDR | (10+8)  ; Y
+        ld      C, IO_LCD_W_MEM             ; IO device
+        ld      B, 8                        ; Amount of bytes to write
+        ld      HL, sprite                  ; Start of data
+write_sprite_loop:
+        ld      A, E                        ; Set Y address
+        add     B
+        out     IO_LCD_W_INSTR, A
+        ld      A, D                        ; Set X address
+        out     IO_LCD_W_INSTR, A
+        outd                                ; Send to IO dev C, contents of (HL), decrement HL and B
+        jr      Z, write_sprite_loop_end
+        jr      write_sprite_loop
+
+write_sprite_loop_end:
 
         ld      A, LCD_EI_SET_8_B_G
         out     IO_LCD_W_INSTR, A
@@ -145,6 +150,16 @@ _display_loop:
 ;
 ;         ld      A, LCD_EI_VSCR_A | 0x04     ; Scroll half a line
 ;         out     IO_LCD_W_INSTR, A
+
+
+                db      0b01100110
+                db      0b01100110
+                db      0b00000000
+                db      0b00001000
+                db      0b00001100
+                db      0b00000000
+                db      0b10000001
+sprite:         db      0b01111110
 
 
 #data RAM_DATA, 0x8000

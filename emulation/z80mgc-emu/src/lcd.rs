@@ -162,8 +162,9 @@ impl MgcLcd {
                         let screen_px_x = x * 8 + word_px_x;
                         let screen_px_y = y;
                         let word = self.gram[y * GRAM_WIDTH + x];
-                        screen[screen_px_x + screen_px_y * SCREEN_W]
-                            = word & (0b10000000 >> word_px_x) != 0;
+                        if word & (0b10000000 >> word_px_x) != 0 {
+                            screen[screen_px_x + screen_px_y * SCREEN_W] = true;
+                        }
                     }
                 }
             }
