@@ -20,45 +20,47 @@ run_tests:
 
 ;;;;;;;;;;;;;;; Test LCD text
 
+
+
 ; Init
         ld      A, LCD_BI_SET_8_B
-        out     IO_LCD_W_INSTR, A
+        call    lcd_w_instr
         ld      A, LCD_BI_CLR
-        out     IO_LCD_W_INSTR, A
+        call    lcd_w_instr
         ld      A, LCD_BI_ON
-        out     IO_LCD_W_INSTR, A
+        call    lcd_w_instr
 ; Write line 1
         ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L1
-        out     IO_LCD_W_INSTR, A
+        call    lcd_w_instr
         ld      A, 'L'
-        out     IO_LCD_W_MEM, A
+        call    lcd_w_mem
         ld      A, 'C'
-        out     IO_LCD_W_MEM, A
+        call    lcd_w_mem
         ld      A, 'D'
-        out     IO_LCD_W_MEM, A
+        call    lcd_w_mem
 ; Write line 3
         ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L3
-        out     IO_LCD_W_INSTR, A
+        call    lcd_w_instr
         ld      A, 'W'
-        out     IO_LCD_W_MEM, A
+        call    lcd_w_mem
         ld      A, 'o'
-        out     IO_LCD_W_MEM, A
+        call    lcd_w_mem
         ld      A, 'r'
-        out     IO_LCD_W_MEM, A
+        call    lcd_w_mem
         ld      A, 'k'
-        out     IO_LCD_W_MEM, A
+        call    lcd_w_mem
         ld      A, 's'
-        out     IO_LCD_W_MEM, A
+        call    lcd_w_mem
 
 ;;;;;;;;;;;;;;; Test RAM and LCD text
 
 ; Init
         ld      A, LCD_BI_SET_8_B
-        out     IO_LCD_W_INSTR, A
+        call    lcd_w_instr
         ld      A, LCD_BI_CLR
-        out     IO_LCD_W_INSTR, A
+        call    lcd_w_instr
         ld      A, LCD_BI_ON
-        out     IO_LCD_W_INSTR, A
+        call    lcd_w_instr
 ; Write to RAM, read and write it to LCD
         ld      A, 'R'
         ld      (ram_test), A
@@ -74,20 +76,20 @@ run_tests:
         ld      (ram_test+5), A
 
         ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L1
-        out     IO_LCD_W_INSTR, A
+        call    lcd_w_instr
 
         ld      A, (ram_test)
-        out     IO_LCD_W_MEM, A
+        call    lcd_w_mem
         ld      A, (ram_test+1)
-        out     IO_LCD_W_MEM, A
+        call    lcd_w_mem
         ld      A, (ram_test+2)
-        out     IO_LCD_W_MEM, A
+        call    lcd_w_mem
         ld      A, (ram_test+3)
-        out     IO_LCD_W_MEM, A
+        call    lcd_w_mem
         ld      A, (ram_test+4)
-        out     IO_LCD_W_MEM, A
+        call    lcd_w_mem
         ld      A, (ram_test+5)
-        out     IO_LCD_W_MEM, A
+        call    lcd_w_mem
 
 
 ;;;;;;;;;;;;;;; Test LCD graphics
@@ -95,22 +97,25 @@ run_tests:
 ; Init graphics
 
         ld      A, LCD_EI_SET_8_E_G         ; Twice because first only sets extended mode
-        out     IO_LCD_W_INSTR, A
+        call    lcd_w_instr
         ld      A, LCD_EI_SET_8_E_G
-        out     IO_LCD_W_INSTR, A
+        call    lcd_w_instr
 
 ; Clear graphics
 
         ld      E, 63                       ; Y
 clear_loop_ver:
-        ld      B, 16                        ; Counter for X
+        ld      B, 16                       ; Counter for X
+        call    lcd_wait
         ld      A, E                        ; Set Y
         or      A, LCD_EI_GD_ADDR
         out     IO_LCD_W_INSTR, A
+        call    lcd_wait
         ld      A, LCD_EI_GD_ADDR | 0       ; Set X to zero
         out     IO_LCD_W_INSTR, A
-        ld      A, 0                        ; Data
 clear_loop_hor:
+        call    lcd_wait
+        ld      A, 0                        ; Data
         out     IO_LCD_W_MEM, A
         djnz    clear_loop_hor              ; Decrement B and jump if not zero
 
@@ -125,17 +130,21 @@ clear_loop_hor:
         ld      B, 8                        ; Amount of bytes to write
         ld      HL, sprite                  ; Start of data
 write_sprite_loop:
+        call    lcd_wait
         ld      A, E                        ; Set Y address
         add     B
         out     IO_LCD_W_INSTR, A
+        call    lcd_wait
         ld      A, D                        ; Set X address
         out     IO_LCD_W_INSTR, A
+        call    lcd_wait
         outd                                ; Send to IO dev C, contents of (HL), decrement HL and B
         jr      Z, write_sprite_loop_end
         jr      write_sprite_loop
 
 write_sprite_loop_end:
 
+        call    lcd_wait
         ld      A, LCD_EI_SET_8_B_G
         out     IO_LCD_W_INSTR, A
 
@@ -150,6 +159,38 @@ write_sprite_loop_end:
 ;
 ;         ld      A, LCD_EI_VSCR_A | 0x04     ; Scroll half a line
 ;         out     IO_LCD_W_INSTR, A
+
+
+
+; - A: Instruction
+
+; - C: Trash
+lcd_w_instr:
+        ld      C, IO_LCD_R_INSTR
+_lcd_w_instr_check_busy:
+        in      (C)                         ; Undocumented instruction. Only sets flags
+        jp      M, _lcd_w_instr_check_busy
+        out     IO_LCD_W_INSTR, A
+        ret
+
+
+; - A: Trash
+lcd_wait:
+        in      A, IO_LCD_R_INSTR
+        bit     7, A
+        jr      NZ, lcd_wait
+        ret
+
+; - A: Data
+
+; - C: Trash
+lcd_w_mem:
+        ld      C, IO_LCD_R_INSTR
+_lcd_w_mem_check_busy:
+        in      (C)                         ; Undocumented instruction. Only sets flags
+        jp      M, _lcd_w_mem_check_busy
+        out     IO_LCD_W_MEM, A
+        ret
 
 
                 db      0b01100110

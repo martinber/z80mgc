@@ -1,5 +1,7 @@
 /// Only emulates the 8x16 english characters and not the chinese 16x16 chars
 /// Icon RAM not emulated because I don't even know if that thing exists, documentation is awful
+/// After each instruction it always becomes busy until two read instructions are done. This
+/// way, we force the z80 code to be correct and to always check the busy status
 
 use rand;
 use crate::lcd_font::LCD_FONT;
@@ -59,6 +61,9 @@ pub struct MgcLcd {
     ddram: DDRam,
     gram: GRam,
 
+    /// True if currently busy
+    busy: bool,
+
     /// RE bit according to documentation. true if using extended instruction set
     extended_instr: bool,
 
@@ -102,6 +107,7 @@ impl MgcLcd {
     pub fn new() -> MgcLcd {
         let mut lcd = MgcLcd {
             cgram: [0x00; CGRAM_LENGTH],
+            busy: false,
             ddram: [0x2020; DDRAM_LENGTH],
             gram: [0x00; GRAM_LENGTH],
             extended_instr: false,
@@ -181,6 +187,8 @@ impl MgcLcd {
 
             (false, false, false) => { // Standard instruction set, write instructions
 
+                assert!(!self.busy, "LCD is busy");
+
                 if data == 0b0000_0001 {
                     // Clear
                     for word in self.ddram.iter_mut() {
@@ -255,9 +263,13 @@ impl MgcLcd {
                     );
                 }
 
+                self.busy = true;
+
                 return None;
             },
             (true, false, false) => { // Extended instruction set, write instructions
+
+                assert!(!self.busy, "LCD is busy");
 
                 if data == 0b0000_0001 {
                     // Stand by
@@ -318,20 +330,21 @@ impl MgcLcd {
                     self.second_rw = false;
                 }
 
+                self.busy = true;
+
                 return None;
             },
-            (false, false, true) => { // Standard instruction set, read instruction
-                let result = self.address_counter;
-                // Not setting the BUSY flag
-                return Some(result as u8);
-            },
-            (true, false, true) => { // Extended instruction set, read instruction
-                let result = self.address_counter;
-                // Not setting the BUSY flag
-                return Some(result as u8);
+            (_, false, true) => { // Any instruction set, read instruction
+                let mut result: u8 = self.address_counter as u8;
+                if self.busy {
+                    result |= 0b1000_0000;
+                }
+                self.busy = false;
+                return Some(result);
             },
             (_, true, false) => { // Any instruction set, write data
 
+                assert!(!self.busy, "LCD is busy");
 
                 match self.curr_memory {
 
@@ -378,6 +391,8 @@ impl MgcLcd {
 
                     _ => unimplemented!("Writing other memories"),
                 }
+
+                self.busy = true;
 
                 return None;
             },

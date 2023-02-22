@@ -89,7 +89,7 @@ main_loop:
         call    NZ, button_left
         bit     BUTTON_R, B
         call    NZ, button_right
-input_end:
+_input_end:
 ; Move head
         ld      BC, (sn_head_xy)        ; Get head direction in A
         call    get_tile
@@ -346,6 +346,7 @@ _field_clear_loop:
         jr      _field_clear_loop       ; Loop
 
 
+
 ; Args:
 ; - None
 ; Ret:
@@ -405,6 +406,8 @@ _random_tile_y:
 _random_tile_y_found:
         ld      B, A                    ; Store position
         ret
+
+
 
 ; Characters used to display each thing
 disp_empty:     ds      ' '

@@ -45,12 +45,7 @@ struct EmulationState {
 
 struct GuiState {
     window: gtk::ApplicationWindow,
-    button_up: gtk::Button,
-    button_down: gtk::Button,
-    button_left: gtk::Button,
-    button_right: gtk::Button,
     button_reset: gtk::Button,
-    screen: gtk::TextView,
     canvas: gtk::DrawingArea,
 }
 
@@ -122,12 +117,7 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
     let builder = gtk::Builder::from_string(glade_src);
 
     let window: gtk::ApplicationWindow = builder.object("window").expect("Couldn't get window");
-    let button_up: gtk::Button = builder.object("button_up").expect("Couldn't get button_up");
-    let button_down: gtk::Button = builder.object("button_up").expect("Couldn't get button_up");
-    let button_left: gtk::Button = builder.object("button_up").expect("Couldn't get button_up");
-    let button_right: gtk::Button = builder.object("button_up").expect("Couldn't get button_up");
     let button_reset: gtk::Button = builder.object("button_reset").expect("Couldn't get button_reset");
-    let screen: gtk::TextView = builder.object("screen").expect("Couldn't get screen");
     let canvas: gtk::DrawingArea = builder.object("canvas").expect("Couldn't get canvas");
     window.set_application(Some(application));
 
@@ -210,12 +200,7 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
     GUI_STATE.with(move |global| {
         *global.borrow_mut() = Some(GuiState {
             window,
-            screen,
             canvas,
-            button_up,
-            button_down,
-            button_left,
-            button_right,
             button_reset,
         })
     });
