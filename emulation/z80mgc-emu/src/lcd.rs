@@ -17,6 +17,8 @@ const CHAR_H: usize = 16;
 const SCREEN_W: usize = 128;
 /// Screen height in pixels
 const SCREEN_H: usize = 64;
+/// Number of horizontal words or 8bit blocks in GRAM
+const GRAM_WIDTH: usize = 16;
 
 /// Character Generator RAM. 4 * 16 * 16 bits for 8 double width chars of 16x16px
 type CGRam = [u8; CGRAM_LENGTH];
@@ -40,7 +42,7 @@ const DDRAM_LINE_ADDR: [usize; 8] = [0x00, 0x10, 0x08, 0x18, 0x20, 0x30, 0x28, 0
 /// Actually I say "2 banks" but there is no division within banks, you can scroll and display half
 /// of each for example.
 type GRam = [u8; GRAM_LENGTH];
-const GRAM_LENGTH: usize = 64;
+const GRAM_LENGTH: usize = 2048;
 
 /// Rendered screen: 128x64 pixels
 type Screen = [bool; SCREEN_W * SCREEN_H];
@@ -63,6 +65,9 @@ pub struct MgcLcd {
     /// Address Counter AC
     address_counter: usize,
 
+    /// (X, Y) address in GRAM
+    gram_address: (usize, usize),
+
     /// I/D according to documentation. true if cursor moves right or bool if moves left
     direction_right: bool,
 
@@ -80,11 +85,17 @@ pub struct MgcLcd {
     /// Where next write/read operation will take place
     curr_memory: Memory,
 
-    /// After setting the address, an extra dummy read is necessary. No need of something similar for writing
+    /// After setting the address, an extra dummy read is necessary. No need of something similar
+    /// for writing
     dummy_read_necessary: bool,
 
-    /// Byte writes should always come in pairs, similar for reads
+    /// Byte writes should always come in pairs, similar for reads. This keeps track if we are
+    /// doing the first or the second read/write
     second_rw: bool,
+
+    /// When setting GRAM address, two bytes are sent. This keeps track of which one we are
+    /// expecing
+    second_gram_addr: bool,
 }
 
 impl MgcLcd {
@@ -95,6 +106,7 @@ impl MgcLcd {
             gram: [0x00; GRAM_LENGTH],
             extended_instr: false,
             address_counter: 0,
+            gram_address: (0, 0),
             direction_right: true,
             shift_on: false,
             display_on: false,
@@ -105,6 +117,7 @@ impl MgcLcd {
             curr_memory: Memory::DDRam,
             dummy_read_necessary: false,
             second_rw: false,
+            second_gram_addr: false,
         };
         // On my LCD, I observed that GRAM has random stuff when turned on
         for byte in lcd.gram.iter_mut() {
@@ -115,6 +128,11 @@ impl MgcLcd {
     }
 
     pub fn draw(&self, screen: &mut Screen) {
+        if !self.display_on {
+            return;
+        }
+
+        // Draw text
         for x in 0..TEXT_W {
             for y in 0..TEXT_H {
 
@@ -124,8 +142,6 @@ impl MgcLcd {
                     1 => self.ddram[ddram_addr] & 0x00FF,
                     _ => unreachable!(),
                 };
-                // let ddram_word: u8 = self.ddram[(DDRAM_LINE_ADDR[y] + x) as usize]
-                // let character: usize = self.ddram[(DDRAM_LINE_ADDR[y] + x) as usize] as usize;
 
                 for char_px_x in 0..CHAR_W {
                     for char_px_y in 0..CHAR_H {
@@ -135,26 +151,23 @@ impl MgcLcd {
                             = LCD_FONT[ddram_byte as usize][char_px_y] & (0b10000000 >> char_px_x) != 0;
                     }
                 }
-
-
             }
         }
 
-
-
-        // let mut text: String = String::from("");
-        //
-        // // TODO: Handle second bank correctly
-        // for y in 0..4 {
-        //     if y > 0 {
-        //         text.push('\n');
-        //     }
-        //     for x in 0..8 {
-        //         let word: u16 = self.ddram[CGRAM_LINE_ADDR[y] + x];
-        //         text.push(char::from_u32(((word & 0xFF00) >> 8) as u32).unwrap());
-        //         text.push(char::from_u32((word & 0x00FF) as u32).unwrap());
-        //     }
-        // }
+        if self.graphic_on {
+            // Draw graphics
+            for x in 0..GRAM_WIDTH {
+                for y in 0..SCREEN_H {
+                    for word_px_x in 0..8 {
+                        let screen_px_x = x * 8 + word_px_x;
+                        let screen_px_y = y;
+                        let word = self.gram[y * GRAM_WIDTH + x];
+                        screen[screen_px_x + screen_px_y * SCREEN_W]
+                            = word & (0b10000000 >> word_px_x) != 0;
+                    }
+                }
+            }
+        }
     }
 
     /// Send command or data to LCD.
@@ -173,6 +186,9 @@ impl MgcLcd {
                         *word = 0x2020; // Wto 0x20 chars
                     }
                     self.address_counter = 0;
+                    self.curr_memory = Memory::DDRam;
+                    self.second_rw = false;
+                    self.second_gram_addr = false;
                 } else if (data & 0b1111_1110) == 0b0000_0010 {
                     // Home
                     self.address_counter = 0;
@@ -217,6 +233,8 @@ impl MgcLcd {
                     self.address_counter = (data & 0b0011_1111) as usize;
                     self.curr_memory = Memory::CGRam;
                     self.dummy_read_necessary = true;
+                    self.second_rw = false;
+                    self.second_gram_addr = false;
                     assert!(self.address_counter <= 0x3F); // Documentation says this
                     // assert!(self.s_address == false); // Documentation says this
                     unimplemented!("s_address");
@@ -227,6 +245,7 @@ impl MgcLcd {
                     self.curr_memory = Memory::DDRam;
                     self.dummy_read_necessary = true;
                     self.second_rw = false;
+                    self.second_gram_addr = false;
                     assert!(
                         (0x00 <= self.address_counter && self.address_counter <= 0x07) // Line 1
                         || (0x10 <= self.address_counter && self.address_counter <= 0x17) // Line 2
@@ -286,7 +305,16 @@ impl MgcLcd {
                     unimplemented!("s_address");
                 } else if (data & 0b1000_0000) == 0b1000_0000 {
                     // Set GRAM address
-                    unimplemented!("GRAM address");
+                    self.curr_memory = Memory::GRam;
+                    if !self.second_gram_addr {
+                        self.gram_address.1 = (data & 0b0111_1111) as usize;
+                        self.second_gram_addr = true;
+                    } else {
+                        self.gram_address.0 = (data & 0b0000_1111) as usize;
+                        self.second_gram_addr = false;
+                    }
+                    self.dummy_read_necessary = true;
+                    self.second_rw = false;
                 }
 
                 return None;
@@ -302,40 +330,53 @@ impl MgcLcd {
                 return Some(result as u8);
             },
             (_, true, false) => { // Any instruction set, write data
-                let mut word: u16 = match self.curr_memory {
-                    Memory::DDRam => self.ddram[self.address_counter],
-                    _ => unimplemented!("Reading other memories"),
-                };
 
-                if self.second_rw { // Put data in less significative bits
-                    word &= 0xFF00;
-                    word |= data as u16;
-                } else { // Put data in most significative bits
-                    word &= 0x00FF;
-                    word |= (data as u16) << 8;
-                }
 
                 match self.curr_memory {
-                    Memory::DDRam => self.ddram[self.address_counter] = word,
+
+                    Memory::DDRam => {
+                        let mut word: u16 = self.ddram[self.address_counter];
+
+                        if self.second_rw { // Put data in less significative bits
+                            word &= 0xFF00;
+                            word |= data as u16;
+                        } else { // Put data in most significative bits
+                            word &= 0x00FF;
+                            word |= (data as u16) << 8;
+                        }
+
+                        self.ddram[self.address_counter] = word;
+
+                        if self.direction_right {
+                            if self.second_rw {
+                                self.address_counter = self.address_counter.wrapping_add(1);
+                            }
+                            if self.shift_on {
+                                unimplemented!("Shift everything left");
+                            }
+                        } else {
+                            if self.second_rw {
+                                self.address_counter = self.address_counter.wrapping_sub(1);
+                            }
+                            if self.shift_on {
+                                unimplemented!("Shift everything right");
+                            }
+                        }
+                        self.second_rw = !self.second_rw;
+                    },
+
+                    Memory::GRam => {
+                        let address = self.gram_address.1 * GRAM_WIDTH + self.gram_address.0;
+                        self.gram[address] = data;
+
+                        self.gram_address.0 += 1;
+                        if self.gram_address.0 >= GRAM_WIDTH {
+                            self.gram_address.0 = 0;
+                        }
+                    },
+
                     _ => unimplemented!("Writing other memories"),
                 }
-
-                if self.direction_right {
-                    if self.second_rw {
-                        self.address_counter = self.address_counter.wrapping_add(1);
-                    }
-                    if self.shift_on {
-                        unimplemented!("Shift everything left");
-                    }
-                } else {
-                    if self.second_rw {
-                        self.address_counter = self.address_counter.wrapping_sub(1);
-                    }
-                    if self.shift_on {
-                        unimplemented!("Shift everything right");
-                    }
-                }
-                self.second_rw = !self.second_rw;
 
                 return None;
             },
