@@ -3,9 +3,17 @@ z80mgc
 
 z80 minimal game console
 
-```
-~/extra/async/programas/zasm-4.4.10-Linux64/zasm ./../../src/test.asm -l ./../../out/test.lst -o ./../../out/test.bin -uw; cargo run -- ../../out/test.bin
-```
+Specs:
+
+- CPU: Z80 CMOS at ???? MHz
+- ROM: 16384 bytes (2 x 28C64 EEPROM)
+- RAM: 32768 bytes (1 x 71256 RAM)
+- Screen: 128x64 px LCD for text and graphics (ST7920 driver)
+- Input: 8 buttons, read by polling
+
+Games:
+
+- Snake
 
 Clock speed
 -----------
@@ -20,57 +28,45 @@ Clock speed
   around half a clock cycle). When reading, data is valid 260ns after enabled (CPU waits for around
   2 clock cycles)
 - Logic gates have around 10ns propagation time.
-- The nake game was doing around 150 instructions per game loop. If I consider 4 clocks per
+- The snake game was doing around 150 instructions per game loop. If I consider 4 clocks per
   instruction, I can run it at 60fps if the clock is at around 36kHz?
 
 So apparently I can run at full clock speed, where I would be close to reaching the limit of LCD
 read times. I have to wait LCD after each instruction.
 
-Other display options
----------------------
+Other ideas
+-----------
 
-* LCD with HD44780: http://6502.org/mini-projects/optrexlcd/lcd.htm
+Other display options I considered:
 
-* LCD with ST7920, allows graphics
+- LCD with HD44780: http://6502.org/mini-projects/optrexlcd/lcd.htm
 
-* LCD with KS0108, allows graphics
+- LCD with ST7920, allows graphics
 
-* Nokia 5110
+- LCD with KS0108, allows graphics
 
-  * Parallel to serial
+- Nokia 5110
 
-* ILI9163C display
+- ILI9163C display
 
-  * Parallel to serial
+- Something with AD722
 
-* Composite video: http://www.cpuville.com/Projects/Standalone-Z80-computer/Standalone-Z80-home.html
+- Yamaha V9958, Yamaha V9938, Yamaha V9959, Yamaha V9990, Motorola 6845, Motorola 6847, TMS9918
 
-  * Shift registers
+- Text only OSD chips: MAX7456
 
-  * Resistors and transistors
+- Text only: Intel 8275 CRTC together with Intel 8257 DMA controller
 
-  * Precise clock
+- Composite video: http://www.cpuville.com/Projects/Standalone-Z80-computer/Standalone-Z80-home.html
 
-  * Precise delay tuning
+- Composite video with a microcontroller
 
-* SOmething with AD722?
+- Composite video with ICs: https://www.chrismcovell.com/dottorikun.html#schematic
 
-* Yamaha V9958, Yamaha V9938, Yamaha V9959, Yamaha V9990, Motorola 6845, Motorola 6847, TMS9918,
+I considered adding sound:
 
-* Text only OSD chips: MAX7456
+- SN76489
 
-* Text only: Intel 8275 CRTC together with Intel 8257 DMA controller
+Other timer options:
 
-* Composite video with a microcontroller?
-
-* Composite video with ICs: https://www.chrismcovell.com/dottorikun.html#schematic
-
-Sound
------
-
-* SN76489
-
-Timing
-------
-
-* Mouser has Z80 timers
+- Z80 CTC

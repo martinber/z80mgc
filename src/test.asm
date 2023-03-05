@@ -139,8 +139,7 @@ write_sprite_loop:
         out     IO_LCD_W_INSTR, A
         call    lcd_wait
         outd                                ; Send to IO dev C, contents of (HL), decrement HL and B
-        jr      Z, write_sprite_loop_end
-        jr      write_sprite_loop
+        jr      NZ, write_sprite_loop
 
 write_sprite_loop_end:
 

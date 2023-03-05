@@ -4,13 +4,13 @@
 
 STACK_SIZE:     equ     32 ; in bytes
 ; Screen size in characters/tiles
-FIELD_W:        equ     8
-FIELD_H:        equ     4
-FIELD_WH:       equ     8*4
+FIELD_W:        equ     16
+FIELD_H:        equ     8
+FIELD_WH:       equ     16*8
 ; Mask of bits necessary to represent field size
-FIELD_W_MASK:   equ     0b00000111
-FIELD_H_MASK:   equ     0b00000011
-FIELD_WH_MASK:  equ     0b00001111
+FIELD_W_MASK:   equ     0b00001111
+FIELD_H_MASK:   equ     0b00000111
+FIELD_WH_MASK:  equ     0b00011111
 ; Buttom map.
 ; In the hardware, each one of this bits will be set if the button is pressed and an IN instruction
 ; is executed
@@ -19,13 +19,13 @@ BUTTON_U:       equ     0 ; 0b00000001, U4
 BUTTON_D:       equ     1 ; 0b00000010, Down
 BUTTON_L:       equ     2 ; 0b00000100, Left
 BUTTON_R:       equ     3 ; 0b00001000, Right
-; Possible tile values written to RAM, they are also the characters show on the LCD
+; Possible tile values written to RAM, they are also equal to the the sprite number
 TILE_EMPTY:     equ     0x20
-TILE_SN_U:      equ     0x5E ; Snake body moving up
-TILE_SN_D:      equ     0x76
-TILE_SN_L:      equ     0x3C
-TILE_SN_R:      equ     0x3E
-TILE_FOOD:      equ     0x02
+TILE_SN_U:      equ     0x01 ; Snake body moving up
+TILE_SN_D:      equ     0x02
+TILE_SN_L:      equ     0x03
+TILE_SN_R:      equ     0x04
+TILE_FOOD:      equ     0x05
 
 #code ROM_CODE, 0x0000
 
@@ -33,21 +33,25 @@ start:
 reset:
         ld      A, 255
         ld      (prng_seed), A          ; This will be updated each time the prng is run
-        ld      SP, stack+STACK_SIZE
+        ld      SP, stack+STACK_SIZE    ; Set stack
+
+        call    lcd_wait                ; Init LCD
         ld      A, LCD_BI_SET_8_B
         out     IO_LCD_W_INSTR, A
+        call    lcd_wait                ; Clear LCD text
         ld      A, LCD_BI_CLR
         out     IO_LCD_W_INSTR, A
+        call    lcd_wait                ; Turn LCD on
         ld      A, LCD_BI_ON
         out     IO_LCD_W_INSTR, A
-        ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L1
+        call    lcd_wait                ; Set extended mode
+        ld      A, LCD_BI_SET_8_E
         out     IO_LCD_W_INSTR, A
-        ld      A, 'H'
-        out     IO_LCD_W_MEM, A
-        ld      A, 'i'
-        out     IO_LCD_W_MEM, A
-        ld      A, '!'
-        out     IO_LCD_W_MEM, A
+        call    lcd_wait                ; Turn on graphics
+        ld      A, LCD_EI_SET_8_E_G
+        out     IO_LCD_W_INSTR, A
+        call    lcd_clr_graphics        ; Clear graphics
+
         call    field_clear
 ; Init snake as two horizontal tiles
         ld      A, 0                    ; Set head and tail positions to 0
@@ -193,41 +197,32 @@ put_food:
 ; - BC
 ; - DE
 ; - HL
+; - tmp_a
 ; Will calculate A <- (field + x + y * FIELD_W)
 set_tile:
+        push    AF                      ; Store arguments
+        push    BC
 
-        ld      D, A                    ; Store value in D
+        ld      DE, BC                  ; Will hold GRAM coordinates
+        sla     D                       ; Multiply Y by 8 because it should be in px
+        sla     D
+        sla     D
+        set     7, D                    ; Equivalent to do OR with LCD_EI_GD_ADDR
+        set     7, E                    ; Equivalent to do OR with LCD_EI_GD_ADDR
 
-        ld      A, B
-        cp      0
-        jr      Z, _set_tile_l1
-        cp      1
-        jr      Z, _set_tile_l2
-        cp      2
-        jr      Z, _set_tile_l3
-        cp      3
-        jr      Z, _set_tile_l4
-        halt                            ; Invalid line
-_set_tile_l1:
-        ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L1
-        jr      _set_tile_l_end
-_set_tile_l2:
-        ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L2
-        jr      _set_tile_l_end
-_set_tile_l3:
-        ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L3
-        jr      _set_tile_l_end
-_set_tile_l4:
-        ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L4
-        jr      _set_tile_l_end
-_set_tile_l_end:
-        add     A, C
-        out     IO_LCD_W_INSTR, A
-        ld      A, D
-        out     IO_LCD_W_MEM, A
-        ld      A, D
-        out     IO_LCD_W_MEM, A
-        ld      A, D                    ; Restore value in A
+        ld      HL, sprite_0            ; Set sprite address to start of sprites data
+        ld      B, 0                    ; Load sprite number in BC
+        ld      C, A
+        sla     C                       ; Multiply C by 8 because it is the sprite height in memory
+        sla     C
+        sla     C
+        add     HL, BC                  ; Add offset of sprite
+
+        ld      B, 8                    ; Set sprite height
+        call    lcd_disp_sprite
+
+        pop     BC                      ; Restore arguments
+        pop     AF
 
 _set_tile_ram:
         ld      HL, field               ; Set HL to start of field
@@ -334,6 +329,7 @@ _move_bc_rel_right_wrap:
 ; - None
 ; Ret:
 ; - None
+; TODO: clear screen too
 field_clear:
         ld      HL, field               ; Init HL to memory location
         ld      A, 0                    ; Init count to 0
@@ -408,14 +404,140 @@ _random_tile_y_found:
         ret
 
 
+; Args:
+; - None
+; Ret:
+; - None
+; Affects:
+; - A
+lcd_wait:
+        in      A, IO_LCD_R_INSTR
+        bit     7, A
+        jr      NZ, lcd_wait
+        ret
 
-; Characters used to display each thing
-disp_empty:     ds      ' '
-disp_sn_u:      ds      '1'
-disp_sn_d:      ds      '1'
-disp_sn_l:      ds      '-'
-disp_sn_r:      ds      '-'
-disp_food:      ds      'O'
+
+; Args:
+; - None
+; Ret:
+; - None
+; Affects:
+; - A
+; - B
+; - E
+lcd_clr_graphics:
+        ld      E, 63                   ; Set Y of last line to clear
+_lcd_clr_graphics_v:
+        ld      B, 16                   ; Set counter for X position
+        call    lcd_wait
+        ld      A, E                    ; Set Y coordinate to E
+        or      A, LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, LCD_EI_GD_ADDR | 0   ; Set X coordinate to zero
+        out     IO_LCD_W_INSTR, A
+_lcd_clr_graphics_h:
+        call    lcd_wait
+        ld      A, 0                    ; Set data to write
+        out     IO_LCD_W_MEM, A         ; Write data. LCD increments X position
+        djnz    _lcd_clr_graphics_h     ; Decrement X and jump if not zero
+        dec     E                       ; Decrement Y and jump if still positive
+        jp      P, _lcd_clr_graphics_v
+        ret
+
+
+; Args:
+; - B: Sprite height
+; - D: Y position of bottom of sprite already in OR with LCD_EI_GD_ADDR (in px from top of LCD)
+; - E: X position already in OR with LCD_EI_GD_ADDR (in tiles of 8px)
+; - HL: Address of end of sprite data
+; Ret:
+; - D: Unchanged
+; - E: Unchanged
+; Affects:
+; - A
+; - B
+; - C
+; - HL
+; Expects LCD already in extended instruction mode
+lcd_disp_sprite:
+        ; ld      D, LCD_EI_GD_ADDR | 1       ; X
+        ; ld      E, LCD_EI_GD_ADDR | (10+8)  ; Y
+        ld      C, IO_LCD_W_MEM             ; IO device
+        ; ld      B, 8                        ; Amount of bytes to write
+        ; ld      HL, sprite                  ; Start of data
+_lcd_disp_sprite_loop:
+        call    lcd_wait
+        ld      A, D                        ; Set Y address
+        add     B
+        dec     A
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, E                        ; Set X address
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        outd                                ; Send to IO dev C, contents of (HL), decrement HL and B
+        jr      NZ, _lcd_disp_sprite_loop
+        ret
+
+
+; Bitmaps in ROM
+
+; Sprite 0 is always empty. The tag points to the address of the last line
+                db      0b00000000
+                db      0b00000000
+                db      0b00000000
+                db      0b00000000
+                db      0b00000000
+                db      0b00000000
+                db      0b00000000
+sprite_0:       db      0b00000000
+
+; TILE_SN_U
+                db      0b01111110
+                db      0b11111111
+                db      0b11110111
+                db      0b01111111
+                db      0b11111110
+                db      0b11101111
+                db      0b11111111
+                db      0b01111110
+; TILE_SN_D
+                db      0b01111110
+                db      0b11111111
+                db      0b11110111
+                db      0b01111111
+                db      0b11111110
+                db      0b11101111
+                db      0b11111111
+                db      0b01111110
+; TILE_SN_L
+                db      0b01110110
+                db      0b11111111
+                db      0b11111111
+                db      0b11011111
+                db      0b11111011
+                db      0b11111111
+                db      0b11111111
+                db      0b01101110
+; TILE_SN_R
+                db      0b01110110
+                db      0b11111111
+                db      0b11111111
+                db      0b11011111
+                db      0b11111011
+                db      0b11111111
+                db      0b11111111
+                db      0b01101110
+; TILE_FOOD
+                db      0b00000000
+                db      0b00111100
+                db      0b01101110
+                db      0b01111110
+                db      0b01111110
+                db      0b01111110
+                db      0b00111100
+                db      0b00000000
 
 #data RAM_DATA, 0x8000
 
@@ -427,4 +549,9 @@ sn_tail_xy:
 sn_tail_x:      data    1
 sn_tail_y:      data    1
 prng_seed:      data    1               ; Has to be set non-zero on startup
+tmp_a:          data    1
+tmp_b:          data    1
+tmp_c:          data    1
+tmp_d:          data    1
+tmp_e:          data    1
 stack:          data    STACK_SIZE
