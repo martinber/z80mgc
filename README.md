@@ -14,6 +14,9 @@ Specs:
 Games:
 
 - Snake
+- Frogger
+- Brick breaker
+- Tanks
 
 Clock speed
 -----------

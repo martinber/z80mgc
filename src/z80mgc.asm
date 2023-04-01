@@ -1,4 +1,4 @@
-; Constants and macros for z80mgc
+; Constants and macros specific to the z80mgc hardware
 
 ; IO addresses. Connections of each bit are:
 ; - (b7,b6,b5) selects the device.
@@ -64,3 +64,17 @@ LCD_DD_ADDR_L4:     equ     0x18        ; Fourth line DDRAM address
 LCD_DD_ADDR_B2:     equ     0x20        ; Offset to second LCD DDRAM buffer.When using second scroll
                                         ; bank for double buffering, first line is at 0x20 instead
                                         ; of 0x00
+
+#code Z80MGC_ROM
+
+; Args:
+; - None
+; Ret:
+; - None
+; Affects:
+; - A
+lcd_wait:
+        in      A, IO_LCD_R_INSTR
+        bit     7, A
+        jr      NZ, lcd_wait
+        ret

@@ -1,8 +1,3 @@
-#target ROM
-
-#include "z80mgc.asm"
-
-STACK_SIZE:     equ     32 ; in bytes
 ; Screen size in characters/tiles
 FIELD_W:        equ     16
 FIELD_H:        equ     8
@@ -27,13 +22,12 @@ TILE_SN_L:      equ     0x03
 TILE_SN_R:      equ     0x04
 TILE_FOOD:      equ     0x05
 
-#code ROM_CODE, 0x0000
+#code SNAKE_ROM
 
-start:
+snake_start::
 reset:
         ld      A, 255
         ld      (prng_seed), A          ; This will be updated each time the prng is run
-        ld      SP, stack+STACK_SIZE    ; Set stack
 
         call    lcd_wait                ; Init LCD
         ld      A, LCD_BI_SET_8_B
@@ -74,11 +68,6 @@ reset:
         call    set_tile
         call    put_food                ; Put food
         jp      main_loop               ; Start game loop
-
-
-.org    0x0066
-nmi:
-        retn
 
 
 main_loop:
@@ -410,19 +399,6 @@ _random_tile_y_found:
 ; - None
 ; Affects:
 ; - A
-lcd_wait:
-        in      A, IO_LCD_R_INSTR
-        bit     7, A
-        jr      NZ, lcd_wait
-        ret
-
-
-; Args:
-; - None
-; Ret:
-; - None
-; Affects:
-; - A
 ; - B
 ; - E
 lcd_clr_graphics:
@@ -539,7 +515,7 @@ sprite_0:       db      0b00000000
                 db      0b00111100
                 db      0b00000000
 
-#data RAM_DATA, 0x8000
+#data SNAKE_RAM, MAIN_RAM_end
 
 field:          data    FIELD_W*FIELD_H
 sn_head_xy:                             ; ld BC,(sn_head_xy) will do B<-y, C<-x
@@ -554,4 +530,3 @@ tmp_b:          data    1
 tmp_c:          data    1
 tmp_d:          data    1
 tmp_e:          data    1
-stack:          data    STACK_SIZE

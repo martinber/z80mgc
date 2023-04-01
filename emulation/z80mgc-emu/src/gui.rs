@@ -72,7 +72,8 @@ fn main_loop(
     canvas: &gtk::DrawingArea,
     clock: &gdk::FrameClock
 ) {
-    if clock.frame_time() - emulation_state.last_nmi_micros > 333333 {
+
+    if clock.frame_time() - emulation_state.last_nmi_micros > 33333 {
 
         emulation_state.cpu.signal_nmi();
         while !emulation_state.cpu.is_halted() {
