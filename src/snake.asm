@@ -394,35 +394,6 @@ _random_tile_y_found:
 
 
 ; Args:
-; - None
-; Ret:
-; - None
-; Affects:
-; - A
-; - B
-; - E
-lcd_clr_graphics:
-        ld      E, 63                   ; Set Y of last line to clear
-_lcd_clr_graphics_v:
-        ld      B, 16                   ; Set counter for X position
-        call    lcd_wait
-        ld      A, E                    ; Set Y coordinate to E
-        or      A, LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, LCD_EI_GD_ADDR | 0   ; Set X coordinate to zero
-        out     IO_LCD_W_INSTR, A
-_lcd_clr_graphics_h:
-        call    lcd_wait
-        ld      A, 0                    ; Set data to write
-        out     IO_LCD_W_MEM, A         ; Write data. LCD increments X position
-        djnz    _lcd_clr_graphics_h     ; Decrement X and jump if not zero
-        dec     E                       ; Decrement Y and jump if still positive
-        jp      P, _lcd_clr_graphics_v
-        ret
-
-
-; Args:
 ; - B: Sprite height
 ; - D: Y position of bottom of sprite already in OR with LCD_EI_GD_ADDR (in px from top of LCD)
 ; - E: X position already in OR with LCD_EI_GD_ADDR (in tiles of 8px)
