@@ -37,6 +37,42 @@ Clock speed
 So apparently I can run at full clock speed, where I would be close to reaching the limit of LCD
 read times. I have to wait LCD after each instruction.
 
+Game timimg
+-----------
+
+I don't have a timer chip like the z80 CTC. So I can count in software the amount of NMI.
+The interrupt happens at falling edge so there is no problem on leaving it for a long time sending a
+NMI signal.
+
+The counter will be 8 bit. The value 255 could be equivalent to approx 2s so in that case I should
+call NMI at approx 128Hz.
+
+- The 555, apparently I can reach around 100kHz. So I can give this as NMI.
+- I could use binary counters. If I have a clock of 6MHz, after 16 bits of counters I would have
+  91.55Hz. I also could give the 8 most significative digits in an input port.
+
+Design ideas
+------------
+
+- Leave a clock input so I can drive it slowly clock by clock
+- Header for future IO
+- Headers to Data, Address and EEPROMs pins so I can write them without taking them out
+- Add LEDs to
+  - 8 bit bus
+  - MREQ
+  - IOREQ
+  - WR
+  - RD
+  - NMI
+  - 16 bit address
+  - ROM1 CE
+  - ROM2 CE
+  - RAM CE
+  - LCD Enable
+  - Each IO enable
+
+
+
 Other ideas
 -----------
 
@@ -65,6 +101,8 @@ Other display options I considered:
 - Composite video with a microcontroller
 
 - Composite video with ICs: https://www.chrismcovell.com/dottorikun.html#schematic
+
+- Composive video with EEPROMs?
 
 I considered adding sound:
 

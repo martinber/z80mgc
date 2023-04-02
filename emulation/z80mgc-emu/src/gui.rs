@@ -1,6 +1,7 @@
 use iz80::Machine;
 use gtk::prelude::*;
 use std::cell::RefCell;
+use std::time::{Duration, Instant};
 
 use crate::emulation;
 
@@ -40,7 +41,7 @@ fn print_field(
 struct EmulationState {
     machine: emulation::MgcMachine,
     cpu: iz80::Cpu,
-    last_nmi_micros: i64,
+    last_nmi: Instant,
 }
 
 struct GuiState {
@@ -72,17 +73,23 @@ fn main_loop(
     canvas: &gtk::DrawingArea,
     clock: &gdk::FrameClock
 ) {
+    // Loop things until we reach 1/30 of a second, and we stop since we don't want to block GTK
+    // and we will wait to be called by GTK again
+    let start_time = Instant::now();
+    while start_time.elapsed() < Duration::from_micros(1000000/60) {
 
-    if clock.frame_time() - emulation_state.last_nmi_micros > 33333 {
+        // Emulate timing by the 555
+        if emulation_state.last_nmi.elapsed() > Duration::from_micros(1000000/128) {
+            emulation_state.cpu.signal_nmi();
+            emulation_state.last_nmi = Instant::now();
+            println!("------------ NMI -------------");
+        }
 
-        emulation_state.cpu.signal_nmi();
-        while !emulation_state.cpu.is_halted() {
+        if !emulation_state.cpu.is_halted() {
             emulation_state.cpu.execute_instruction(&mut emulation_state.machine);
         }
-        canvas.queue_draw();
-        emulation_state.last_nmi_micros = clock.frame_time();
-        println!("------------ NMI -------------");
     }
+    canvas.queue_draw();
 }
 
 
@@ -108,7 +115,7 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
         *global.borrow_mut() = Some(EmulationState {
             machine,
             cpu,
-            last_nmi_micros: 0,
+            last_nmi: Instant::now(),
         })
     });
 

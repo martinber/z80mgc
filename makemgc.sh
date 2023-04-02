@@ -2,7 +2,7 @@
 
 # My sort of makefile
 
-ZASM=/home/mbernardi/extra/async/programas/zasm-4.4.10-Linux64/zasm
+ZASM=zasm
 
 if [[ "$#" -ne 2 ]]; then
     echo "ERROR: Give command and program to use"
@@ -14,10 +14,12 @@ PROGRAM=$2
 
 case "${COMMAND}" in
     "build")
+        mkdir ./out
         ${ZASM} "./src/${PROGRAM}.asm" -l "./out/${PROGRAM}.lst" -o "./out/${PROGRAM}.bin" -uw
         ;;
 
     "emulate")
+        mkdir ./out
         ${ZASM} "./src/${PROGRAM}.asm" -l "./out/${PROGRAM}.lst" -o "./out/${PROGRAM}.bin" -uw \
             && pushd ./emulation/z80mgc-emu \
             && cargo run -- "../../out/${PROGRAM}.bin" \
