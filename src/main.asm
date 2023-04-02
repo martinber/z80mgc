@@ -21,6 +21,10 @@ boot:
 #code MAIN_NMI, 0x066
 
 nmi:
+        ld      HL, timer_1
+        inc     (HL)
+        ld      HL, timer_2
+        inc     (HL)
         retn
 
 
@@ -56,6 +60,8 @@ _lcd_clr_graphics_h:
 #data MAIN_RAM, 0x8000
 
 stack:          data    STACK_SIZE
+timer_1:        data    1
+timer_2:        data    1
 
 #include "z80mgc.asm"
 

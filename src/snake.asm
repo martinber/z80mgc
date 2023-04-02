@@ -71,6 +71,7 @@ reset:
 
 
 main_loop:
+read_input:
 ; Read input and set direction
         in      A, IO_BUT_R             ; Load button states in B
         ld      B, A
@@ -82,6 +83,15 @@ main_loop:
         call    NZ, button_left
         bit     BUTTON_R, B
         call    NZ, button_right
+
+_wait:
+        halt
+        ld      HL, timer_1
+        ld      A, 20
+        cp      (HL)
+        jp      P, read_input
+        ld      (HL), 0
+
 _input_end:
 ; Move head
         ld      BC, (sn_head_xy)        ; Get head direction in A
@@ -106,8 +116,6 @@ _move_tail:
         call    move_bc_rel
         ld      (sn_tail_xy), BC
 _move_tail_end:
-; Wait for NMI and loop
-        halt                            ; Wait for NMI timer
         jr      main_loop
 
 

@@ -78,15 +78,18 @@ fn main_loop(
     let start_time = Instant::now();
     while start_time.elapsed() < Duration::from_micros(1000000/60) {
 
-        // Emulate timing by the 555
-        if emulation_state.last_nmi.elapsed() > Duration::from_micros(1000000/128) {
-            emulation_state.cpu.signal_nmi();
-            emulation_state.last_nmi = Instant::now();
-            println!("------------ NMI -------------");
-        }
 
         if !emulation_state.cpu.is_halted() {
             emulation_state.cpu.execute_instruction(&mut emulation_state.machine);
+        } else {
+
+            // Emulate timing by the 555
+            if emulation_state.last_nmi.elapsed() > Duration::from_micros(1000000/128) {
+                emulation_state.cpu.signal_nmi();
+                emulation_state.last_nmi = Instant::now();
+                println!("------------ NMI -------------");
+            }
+
         }
     }
     canvas.queue_draw();
