@@ -71,7 +71,82 @@ Design ideas
   - LCD Enable
   - Each IO enable
 
+Bricks game
+-----------
 
+### With framebuffer:
+
+Game start:
+
+- Bricks: Draw all bricks
+
+Game loop, in order:
+
+- Ball: Clear old position of ball and move ball coordinate
+
+- Bricks: If collision with ball, redraw if modified or draw zeros to clean area.
+
+- Powerups: If collision with pad, draw zeros to clean area and give powerup.
+
+- Powerups: Draw the 8x3 graphic with OR. Should draw even if not descending because if the ball
+  comes and it is stationary then there will be conflicts, but very unlikely and avoidable if both
+  ball and powerup move together
+
+- Pad: Draw with OR with shifting/rotation.
+
+- Ball: Draw with OR with shifting/rotation.
+
+### Powerups
+
+- Bigger pad
+
+- Smaller pad
+
+- Faster ball
+
+- Slower ball
+
+- Extra ball
+
+- Move all bricks downwards
+
+- Extra life
+
+### Old ideas
+
+Will have a DUL (Drawing Update List) containing coordinates and the byte of graphics that will be
+drawn. Some kind of compressed framebuffer. This is used so I can overlap graphics with AND
+operations in RAM before writing to the LCD.
+
+Game start:
+
+- Bricks: Draw all bricks
+
+Drawing/updating, in order:
+
+- Bricks: If collision with ball, redraw if modified or draw zeros to clean area.
+
+- Powerups: If collision with pad, draw zeros to clean area and give powerup.
+
+- Powerups: Draw in the DUL the 8x4 graphic. The graphic is actually 8x3 but the top line is empty
+  so it will erase the old frame. Draw even if not descending because if the ball comes and it is
+  stationary then there will be conflicts
+
+- Pad: Draw in the DUL using shifting/rotation.
+
+- Ball: Draw in the DUL using shifting/rotation.
+
+Old ideas:
+
+- Powerups: Collision detection with ball and pad, redraw to clean area in that case. If moving
+  downward in this frame, draw full 8x4 object. The graphic is actually 8x3 but the top line is
+  empty so it will erase the previous. Will be destroyed as soon as it touches the
+  ball or the pad, so no problems in drawing order.
+
+- Pad: Draw using shifting/rotation. Draw each time it moves. Draw it in a framebuffer that only
+  covers the last
+
+- Ball: Draw using shifting/rotation. Draw each time it moves, do it last
 
 Other ideas
 -----------
@@ -111,3 +186,67 @@ I considered adding sound:
 Other timer options:
 
 - Z80 CTC
+
+
+PCB design notes
+----------------
+
+- Ground plane in the back layer?
+
+- Check datasheet for recommendations of decoupling capacitors
+
+- Check "return paths" for high speed signals
+
+- Route more important signals first so I minimize the length, vias, etc.
+
+- Add test points, with ground clips
+
+- Add mounting holes in corners first
+
+- I can add jumper resistors
+
+- I can make the SRAM with wide holes too
+
+- Vertial traces in one side and horizontal traces on the other, that way the ground plane is mostly
+  intact
+
+- No 90deg angles, https://www.alternatezone.com/electronics/files/PCBDesignTutorialRevA.pdf
+
+- "I rarely go smaller than 10 mil for any trace unless I have to, and for power I try to use at least 30 mil"
+As a start, you may like to use say 25 thou for signal tracks, 50 thou for power and ground tracks, and 10-15
+thou for going between IC and component pads
+
+- Pads 2x the diameter og the hole. There are some common practices used when it comes to generic component pads. Pads for leaded
+components like resistors, capacitors and diodes should be round, with around 70 thou diameter being common.
+Dual In Line (DIL) components like IC’s are better suited with oval shaped pads (60 thou high by 90-100 thou
+wide is common). Pin 1 of the chip sould always be a different pad shape, usually rectangular, and with the
+same dimensions as the other pins.p
+
+- At least 15 thou is a good clearance limit for basic through hole designs
+
+- Ensure that no part of the silkscreen overlaps a bare pad.
+
+- As a general rule, you should use at least one bypass capacitor per IC or other switching component if possible.
+Common values of bypass capacitors are 100nF for general purpose use, 10nF or 1nF for higher frequencies,
+and 1uF or 10uF for low frequencies.
+
+- Put name and description in silkscreen
+
+
+- Check that solder points have thermal relief pads
+
+To buy
+------
+
+- Battery
+
+- Buttons
+
+- Enclosure
+
+- PCB
+
+- 0 Ohm resistors
+
+- Connector for external I/O
+

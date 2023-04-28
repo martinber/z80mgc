@@ -48,6 +48,7 @@ struct GuiState {
     window: gtk::ApplicationWindow,
     button_reset: gtk::Button,
     canvas: gtk::DrawingArea,
+    switch_trace: gtk::Switch,
 }
 
 thread_local!(
@@ -71,23 +72,24 @@ pub fn main() {
 fn main_loop(
     emulation_state: &mut EmulationState,
     canvas: &gtk::DrawingArea,
-    clock: &gdk::FrameClock
+    clock: &gdk::FrameClock,
+    trace: bool,
 ) {
     // Loop things until we reach 1/30 of a second, and we stop since we don't want to block GTK
     // and we will wait to be called by GTK again
     let start_time = Instant::now();
     while start_time.elapsed() < Duration::from_micros(1000000/60) {
 
-
         if !emulation_state.cpu.is_halted() {
             emulation_state.cpu.execute_instruction(&mut emulation_state.machine);
         } else {
-
             // Emulate timing by the 555
             if emulation_state.last_nmi.elapsed() > Duration::from_micros(1000000/128) {
                 emulation_state.cpu.signal_nmi();
                 emulation_state.last_nmi = Instant::now();
-                println!("------------ NMI -------------");
+                if trace {
+                    println!("------------ NMI -------------");
+                }
             }
 
         }
@@ -103,7 +105,6 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
     let mut machine = emulation::MgcMachine::new();
     let mut cpu = iz80::Cpu::new();
     cpu.registers().set_pc(0x0000);
-    cpu.set_trace(true);
 
     let filename = files[0].path().unwrap();
     let data = std::fs::read(filename).expect("Failed to read file");
@@ -129,6 +130,7 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
 
     let window: gtk::ApplicationWindow = builder.object("window").expect("Couldn't get window");
     let button_reset: gtk::Button = builder.object("button_reset").expect("Couldn't get button_reset");
+    let switch_trace: gtk::Switch = builder.object("switch_trace").expect("Couldn't get switch_trace");
     let canvas: gtk::DrawingArea = builder.object("canvas").expect("Couldn't get canvas");
     window.set_application(Some(application));
 
@@ -143,6 +145,16 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
                 s.cpu.signal_reset();
             }
         });
+    });
+
+    switch_trace.connect_state_set(|_, active| {
+        EMULATION_STATE.with(|global| {
+            let mut emulation_state = global.borrow_mut();
+            if let Some(s) = emulation_state.as_mut() {
+                s.cpu.set_trace(active);
+            }
+        });
+        gtk::Inhibit(false)
     });
 
     window.connect("key_press_event", false, |values| {
@@ -213,6 +225,7 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
             window,
             canvas,
             button_reset,
+            switch_trace,
         })
     });
 
@@ -224,8 +237,12 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
                 GUI_STATE.with(move |global| {
                     let mut gui_state_opt = global.borrow_mut();
                     if let Some(gui_state) = gui_state_opt.as_mut() {
-
-                        main_loop(emulation_state, &gui_state.canvas, clock);
+                        main_loop(
+                            emulation_state,
+                            &gui_state.canvas,
+                            clock,
+                            gui_state.switch_trace.state(),
+                        );
                     }
                 });
             } else {
