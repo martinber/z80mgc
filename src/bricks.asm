@@ -31,15 +31,34 @@ reset:
         ld      DE, tiles
         ldir
 ; Init ball
-        ; ld      (ball_x), 64
-        ; ld      (ball_y), 32
-        ; ld      (ball_vx), 1
-        ; ld      (ball_vy), 1
+        ld      A, 7
+        ld      (ball_x), A
+        ld      A, 0
+        ld      (ball_y), A
+        ld      A, 1
+        ld      (ball_vx), A
+        ld      A, 1
+        ld      (ball_vy), A
+        call    draw_bricks
 _loop:
 
-        call    draw_bricks
         halt
-        jp      _loop
+        call    draw_ball
+        ld      IX, ball_x
+
+
+        ld      A, (timer_0)
+        and     0b00000011
+        jr      NZ, _loop
+
+        ld      A, (IX+0)
+        add     A, (IX+2)
+        ld      (IX+0), A
+        ld      A, (IX+1)
+        add     A, (IX+3)
+        ld      (IX+1), A
+
+        jr      _loop
 
 
 ; ; Tengo que dibujar primero en un buffer de 16x4 y despues copiar
@@ -133,8 +152,79 @@ _draw_bricks_line_loop:
         ret
 
 
+draw_ball:
+        ld      DE, (ball_xy)               ; D<-y, E<-x
+        ld      A, 0b00000111               ; A will hold the modulo 8 of X position
+        and     E
+        srl     E                           ; E will hold the X in tiles, which is X/8
+        srl     E
+        srl     E
+        cp      7                           ; If X is modulo 7, we have to draw two tiles as below
+        jr      Z, _draw_ball_wrapped
+_draw_ball_normal:
+        ld      H, lut_ball/255             ; Get sprite to draw in LUT, lut_ball is 256-aligned
+        ld      L, A
+        call    lcd_wait
+        ld      A, D                        ; Write Y address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, E                        ; Write X address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, (HL)                     ; Write sprite line
+        out     IO_LCD_W_MEM, A
+        inc     D                           ; Now do it again one line below
+        call    lcd_wait
+        ld      A, D                        ; Write Y address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, E                        ; Write X address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, (HL)                     ; Write sprite line
+        out     IO_LCD_W_MEM, A
+        ret
+_draw_ball_wrapped:
+        call    lcd_wait
+        ld      A, D                        ; Write Y address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, E                        ; Write X address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, 0b00000001               ; Draw one pixel in the right
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
+        ld      A, 0b10000000               ; Draw one pixel in the left
+        out     IO_LCD_W_MEM, A
+        inc     D                           ; Now do it again one line below
+        call    lcd_wait
+        ld      A, D                        ; Write Y address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, E                        ; Write X address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, 0b00000001               ; Draw one pixel in the right
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
+        ld      A, 0b10000000               ; Draw one pixel in the left
+        out     IO_LCD_W_MEM, A
+        ret
+
+
+
+
 ; Levels in ROM. Each line of bricks is 16 bytes, and there are max 8 lines of 5 px tall.
-; I make aliases to TILE_AIR, TILE_BR0, etc so its easier
+; I make aliases to TILE_AIR, TILE_DR0, etc so its easier
 __:             equ     TILE_AIR
 _0:             equ     TILE_BR0
 _1:             equ     TILE_BR1
@@ -192,10 +282,14 @@ TILE_BR1:       equ     3
 sprite_br2:     db      0b01111100
 TILE_BR2:       equ     4
 
+                .align  0x0100
+lut_ball:       db      0b11000000      ; This is a lool up table for ball positions modulo 0 to 6
                 db      0b01100000
-                db      0b10010000
-                db      0b10110000
-sprite_ball:    db      0b01100000
+                db      0b00110000
+                db      0b00011000
+                db      0b00001100
+                db      0b00000110
+                db      0b00000011
 
 
 
@@ -209,11 +303,11 @@ tiles:          data    16*8            ; Tiles, or state of the bricks of the l
 ball_xy:                                ; ld BC,(ball_xy) will do B<-y, C<-x
 ball_x:         data    1
 ball_y:         data    1
-pad_x:          data    1
 ; Velocity in pixels/frame
 ball_vxvy:                              ; ld BC,(ball_vxvy) will do B<-vy, C<-vx
 ball_vx:        data    1
 ball_vy:        data    1
+pad_x:          data    1
 ; Length in 8px tiles
 pad_len:        data    1
 ; Variables for draw_bricks
