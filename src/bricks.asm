@@ -40,7 +40,7 @@ reset:
         ld      A, 1
         ld      (ball_vy), A
 
-        ld      A, 116                  ; Init pad
+        ld      A, 56                   ; Init pad
         ld      (pad_x), A
         ld      A, 3
         ld      (pad_len), A
@@ -64,6 +64,8 @@ _loop:
         ld      A, (IX+1)
         add     A, (IX+3)
         ld      (IX+1), A
+
+        inc      (IX+4)               ; Move pad by 1
 
         jr      _loop
 
@@ -203,37 +205,57 @@ _draw_ball_wrapped:
 
 draw_pad:
         ld      C, IO_LCD_W_MEM             ; IO device
-
+        ld      IX, sprite_pad              ; Sprite line should be in IX and IX+4 for right edge
         ld      H, 0                        ; Line number
+
+        ld      A, (pad_x)                  ; Get pad_x / 8 in L
+        ld      L, A
+        srl     L
+        srl     L
+        srl     L
+
 _draw_pad_line:
+        ld      A, (pad_x)                  ; Get pad_x modulo 8 in B
+        and     0b00000111
+        ld      B, A
+
         call    lcd_wait
         ld      A, 60                       ; Write Y address
         add     H
         or      LCD_EI_GD_ADDR
         out     IO_LCD_W_INSTR, A
         call    lcd_wait
-        ld      A, 0                        ; Write X address
+        ld      A, L                        ; Write X address
         or      LCD_EI_GD_ADDR
         out     IO_LCD_W_INSTR, A
 
-        ld      B, 4; X modulo 16
-        ld      L, 0b11000000; Sprite line
-        ld      D, 0b00000011; Sprite line
+        ld      D, (IX)                     ; Left edge
+        ld      E, (IX+4)                   ; Right edge
+
+        ld      A, 0                        ; Skip shifting if B=0
+        cp      B
+        jr      Z, _draw_pad_shift_end
+        xor     A                           ; Clear the third tile, reset carry for rotations below
 _draw_pad_shift_loop:
-        srl     L                           ; Shift right first tile
-        sra     D                           ; Shift right second tile, repeating b7 and carrying b0
+        rr      D                           ; Shift right first tile
+        rr      E                           ; Shift right second tile, repeating b7 and carrying b0
         rra                                 ; Shift carry into A for third tile
         djnz    _draw_pad_shift_loop
-        ld      E, A
+_draw_pad_shift_end:
+        ld      B, A
 
-        call    lcd_wait
-        out     (C), L
         call    lcd_wait
         out     (C), D
         call    lcd_wait
         out     (C), E
+        call    lcd_wait
+        out     (C), B
 
-        inc     H
+        inc     IX                          ; Increment pointer to sprite line
+        inc     H                           ; Increment counter of lines drawn
+        ld      A, 4                        ; Loop if we drew less than 4 lines
+        cp      H
+        jr      NZ, _draw_pad_line
         ret
 
 
@@ -295,6 +317,16 @@ TILE_BR1:       equ     3
                 db      0b11111110
 sprite_br2:     db      0b01111100
 TILE_BR2:       equ     4
+
+sprite_pad:     db      0b00111111      ; Left edge
+                db      0b01111111
+                db      0b01100000
+                db      0b00111111
+
+                db      0b11111100      ; Right edge
+                db      0b11110110
+                db      0b00000110
+                db      0b11111100
 
                 .align  0x0100
 lut_ball:       db      0b11000000      ; This is a lool up table for ball positions modulo 0 to 6
