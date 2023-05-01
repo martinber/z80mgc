@@ -80,14 +80,17 @@ fn main_loop(
     let start_time = Instant::now();
     while start_time.elapsed() < Duration::from_micros(1000000/60) {
 
+        let debug = emulation_state.machine.mem[emulation::DEBUG_ADDR] != 0;
+
         if !emulation_state.cpu.is_halted() {
+            emulation_state.cpu.set_trace(debug || trace);
             emulation_state.cpu.execute_instruction(&mut emulation_state.machine);
         } else {
             // Emulate timing by the 555
             if emulation_state.last_nmi.elapsed() > Duration::from_micros(1000000/128) {
                 emulation_state.cpu.signal_nmi();
                 emulation_state.last_nmi = Instant::now();
-                if trace {
+                if debug || trace {
                     println!("------------ NMI -------------");
                 }
             }

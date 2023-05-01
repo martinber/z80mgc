@@ -16,6 +16,8 @@ STACK_SIZE:     equ     32 ; in bytes
 
 boot:
         ld      SP, stack+STACK_SIZE    ; Set stack
+        ld      A, 0                    ; Set debug to 0
+        ld      (debug), A
         ; jp      snake_start
         jp      bricks_start
 
@@ -64,6 +66,7 @@ _lcd_clr_graphics_h:
 
 #data MAIN_RAM, 0x8000
 
+debug:          data    1               ; Flag that will be read by the emulator in address 0x8000
 stack:          data    STACK_SIZE
 timers:
 timer_0:        data    1
