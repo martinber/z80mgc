@@ -30,8 +30,8 @@ reset:
         ld      HL, lvl_2
         ld      DE, tiles
         ldir
-; Init ball
-        ld      A, 7
+
+        ld      A, 7                    ; Init ball
         ld      (ball_x), A
         ld      A, 0
         ld      (ball_y), A
@@ -39,18 +39,25 @@ reset:
         ld      (ball_vx), A
         ld      A, 1
         ld      (ball_vy), A
-        call    draw_bricks
+
+        ld      A, 116                  ; Init pad
+        ld      (pad_x), A
+        ld      A, 3
+        ld      (pad_len), A
+
+        call    draw_bricks             ; Draw bricks
+
 _loop:
-
         halt
-        call    draw_ball
-        ld      IX, ball_x
-
-
-        ld      A, (timer_0)
+        ld      A, (timer_0)            ; Continue waiting if less than 8 ticks passed
         and     0b00000011
         jr      NZ, _loop
 
+        call    draw_pad                ; Draw pad
+
+        call    draw_ball               ; Draw ball
+
+        ld      IX, ball_x              ; Move ball according to velocity
         ld      A, (IX+0)
         add     A, (IX+2)
         ld      (IX+0), A
@@ -61,46 +68,13 @@ _loop:
         jr      _loop
 
 
-; ; Tengo que dibujar primero en un buffer de 16x4 y despues copiar
-; draw_ball:
-;         ld      B, (ball_x)
-;         ld      DE, (ball_xy)
-;         srl     B                       ; Divide by 8
-;         srl     B
-;         srl     B
-;
-;         ld      A, (sprite_ball)
-;
-; _draw_ball_s:
-;         cp      B, D                    ; If both are equal, means ew are done shifting the tile
-;         jp      Z, _draw_ball_s_end
-;
-;
-;
-; ; Tengo que dibujar primero en un buffer de 16x4 y despues copiar
-; draw_ball:
-;         ld      B, (ball_x)
-;         ld      DE, (ball_xy)
-;         srl     B                       ; Divide by 8
-;         srl     B
-;         srl     B
-;
-;         lcd_disp_sprite
-;
-; _draw_ball_s:
-;         cp      B, D                    ; If both are equal, means ew are done shifting the tile
-;         jp      Z, _draw_ball_s_end
-
 
 ; Args:
 ; - Nothing
 ; Ret:
 ; - Nothing
 ; Affects:
-; - A
-; - BC
-; - DE
-; - HL
+; - All
 draw_bricks:
         ld      D, tiles/255                ; DE holds tile memory address. Table is 256-aligned, so
         ld      E, 0                        ; D will be high byte of table start address and the low
@@ -152,6 +126,12 @@ _draw_bricks_line_loop:
         ret
 
 
+; Args:
+; - Nothing
+; Ret:
+; - Nothing
+; Affects:
+; - All
 draw_ball:
         ld      DE, (ball_xy)               ; D<-y, E<-x
         ld      A, 0b00000111               ; A will hold the modulo 8 of X position
@@ -221,6 +201,40 @@ _draw_ball_wrapped:
         ret
 
 
+draw_pad:
+        ld      C, IO_LCD_W_MEM             ; IO device
+
+        ld      H, 0                        ; Line number
+_draw_pad_line:
+        call    lcd_wait
+        ld      A, 60                       ; Write Y address
+        add     H
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, 0                        ; Write X address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+
+        ld      B, 4; X modulo 16
+        ld      L, 0b11000000; Sprite line
+        ld      D, 0b00000011; Sprite line
+_draw_pad_shift_loop:
+        srl     L                           ; Shift right first tile
+        sra     D                           ; Shift right second tile, repeating b7 and carrying b0
+        rra                                 ; Shift carry into A for third tile
+        djnz    _draw_pad_shift_loop
+        ld      E, A
+
+        call    lcd_wait
+        out     (C), L
+        call    lcd_wait
+        out     (C), D
+        call    lcd_wait
+        out     (C), E
+
+        inc     H
+        ret
 
 
 ; Levels in ROM. Each line of bricks is 16 bytes, and there are max 8 lines of 5 px tall.

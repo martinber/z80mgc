@@ -18,6 +18,14 @@ Games:
 - Brick breaker
 - Tanks
 
+Glossary
+--------
+
+- Tick: Approx 1/126 of a second, timer counters are incremented each tick thanks to a 555 timer at
+  around 126Hz that does NMI regularly.
+- Frame: Depends in the game, for example the snake might move every every frame that happens every
+  16 ticks.
+
 Clock speed
 -----------
 
