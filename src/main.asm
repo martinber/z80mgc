@@ -8,6 +8,7 @@
 ; - Use #data SNAKE_RAM, MAIN_ROM_end so the address is after the reserved space for this main code,
 ;   and the address is the same as the other games use (we never run 2 games at the same time)
 ; - Have a global label named snake_start
+; - Cannot use A' and F'
 
 STACK_SIZE:     equ     32 ; in bytes
 
@@ -15,16 +16,20 @@ STACK_SIZE:     equ     32 ; in bytes
 
 boot:
         ld      SP, stack+STACK_SIZE    ; Set stack
-        jp      snake_start
-        ; jp      bricks_start
+        ; jp      snake_start
+        jp      bricks_start
 
 #code MAIN_NMI, 0x066
 
 nmi:
-        ld      HL, timer_1
-        inc     (HL)
-        ld      HL, timer_2
-        inc     (HL)
+        ex      AF, AF'
+        ld      A, (timer_0)            ; Increment timer 0
+        inc     A
+        ld      (timer_0), A
+        ld      A, (timer_1)            ; Increment timer 1
+        inc     A
+        ld      (timer_1), A
+        ex      AF, AF'
         retn
 
 
@@ -60,8 +65,9 @@ _lcd_clr_graphics_h:
 #data MAIN_RAM, 0x8000
 
 stack:          data    STACK_SIZE
+timers:
+timer_0:        data    1
 timer_1:        data    1
-timer_2:        data    1
 
 #include "z80mgc.asm"
 

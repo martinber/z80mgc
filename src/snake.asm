@@ -403,7 +403,7 @@ _random_tile_y_found:
 
 ; Args:
 ; - B: Sprite height
-; - D: Y position of bottom of sprite already in OR with LCD_EI_GD_ADDR (in px from top of LCD)
+; - D: Y position of top of sprite already in OR with LCD_EI_GD_ADDR (in px from top of LCD)
 ; - E: X position already in OR with LCD_EI_GD_ADDR (in tiles of 8px)
 ; - HL: Address of end of sprite data
 ; Ret:

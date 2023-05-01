@@ -25,14 +25,22 @@ Clock speed
 - RAM is 28C64 25P. Therefore I think it is 250ns access time: Data is valid 250ns after OE and CS are set.
 - CPU is Z84C0006TPG. Therefore is 6.17MHz, equivalent to 166ns per clock. It waits memory for 2
   clock cycles (this time is shortened a bit because of the logic gates I use to select memory).
-- LCD takes 1.6ms for clearing and 72 µs (72000ns) for each of the other instructions. So I can do
-  around 13800 instructions per second. When writing make the E pulse at least 160ns long (CPU does
-  this for around 2 clock cycles) and leave the data for 20ns after disabling (CPU does this for
-  around half a clock cycle). When reading, data is valid 260ns after enabled (CPU waits for around
-  2 clock cycles)
+- LCD takes 1.6ms for clearing and 72 µs (72000ns) for each of the other instructions. When writing
+  make the E pulse at least 160ns long (CPU does this for around 2 clock cycles) and leave the data
+  for 20ns after disabling (CPU does this for around half a clock cycle). When reading, data is
+  valid 260ns after enabled (CPU waits for around 2 clock cycles)
 - Logic gates have around 10ns propagation time.
+
+Speed:
+
 - The snake game was doing around 150 instructions per game loop. If I consider 4 clocks per
   instruction, I can run it at 60fps if the clock is at around 36kHz?
+- If I run CPU at 5MHz, with 15fps, assuming instructions of 20 clocks, I can do around 16000 CPU
+  instructions/frame.
+- But the LCD is slower, it takes around 74µs per LCD instruction so if I run at 15fps, I can do
+  around 900 LCD instructions per frame. Considering sprites of 8 tiles and that I have to give X
+  and Y coordinates, it takes 24 instructions per sprite so max I can draw around 37 sprites per
+  frame.
 
 So apparently I can run at full clock speed, where I would be close to reaching the limit of LCD
 read times. I have to wait LCD after each instruction.
