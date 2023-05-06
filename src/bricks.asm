@@ -53,18 +53,14 @@ _loop:
         and     0b00000011
         jr      NZ, _loop
 
+        call    move_ball               ; Move ball and clear screen in old position
+
         call    draw_pad                ; Draw pad
 
         call    draw_ball               ; Draw ball
 
-        ld      IX, ball_x              ; Move ball according to velocity
-        ld      A, (IX+0)
-        add     A, (IX+2)
-        ld      (IX+0), A
-        ld      A, (IX+1)
-        add     A, (IX+3)
-        ld      (IX+1), A
 
+        ld      IX, ball_x              ; Move ball according to velocity
         inc      (IX+4)               ; Move pad by 1
 
         jr      _loop
@@ -125,6 +121,87 @@ _draw_bricks_line_loop:
         ld      A, 128                      ; See if E reached 128, meaning we alreade drew 8 lines
         cp      E
         jr      NZ, _draw_bricks_loop
+        ret
+
+
+; Args:
+; - Nothing
+; Ret:
+; - Nothing
+; Affects:
+; - All
+move_ball:
+        ld      DE, (ball_xy)               ; D<-y, E<-x
+        ld      A, 0b00000111               ; A will hold the modulo 8 of X position
+        and     E
+        srl     E                           ; E will hold the X in tiles, which is X/8
+        srl     E
+        srl     E
+        cp      7                           ; If X is modulo 7, we have to draw two tiles as below
+        jr      Z, _move_ball_wrapped
+_move_ball_normal:
+        call    lcd_wait
+        ld      A, D                        ; Write Y address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, E                        ; Write X address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, 0                        ; Write zeros
+        out     IO_LCD_W_MEM, A
+        inc     D                           ; Now do it again one line below
+        call    lcd_wait
+        ld      A, D                        ; Write Y address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, E                        ; Write X address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, 0                        ; Write zeros
+        out     IO_LCD_W_MEM, A
+        jr      _move_ball_end
+_move_ball_wrapped:
+        call    lcd_wait
+        ld      A, D                        ; Write Y address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, E                        ; Write X address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, 0                        ; Write zeros
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
+        ld      A, 0                        ; Write zeros
+        out     IO_LCD_W_MEM, A
+        inc     D                           ; Now do it again one line below
+        call    lcd_wait
+        ld      A, D                        ; Write Y address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, E                        ; Write X address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, 0                        ; Write zeros
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
+        ld      A, 0                        ; Write zeros
+        out     IO_LCD_W_MEM, A
+_move_ball_end:
+        ld      IX, ball_x                  ; Move ball according to velocity
+        ld      A, (IX+0)
+        add     A, (IX+2)
+        ld      (IX+0), A
+        ld      A, (IX+1)
+        add     A, (IX+3)
+        ld      (IX+1), A
         ret
 
 
@@ -203,6 +280,12 @@ _draw_ball_wrapped:
         ret
 
 
+; Args:
+; - Nothing
+; Ret:
+; - Nothing
+; Affects:
+; - All
 draw_pad:
         ld      C, IO_LCD_W_MEM             ; IO device
         ld      IX, sprite_pad              ; Sprite line should be in IX and IX+4 for right edge
