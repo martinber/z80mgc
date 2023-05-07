@@ -31,14 +31,13 @@ reset:
         ld      DE, tiles
         ldir
 
-        ld      A, 7                    ; Init ball
-        ld      (ball_x), A
-        ld      A, 0
-        ld      (ball_y), A
-        ld      A, 1
-        ld      (ball_vx), A
-        ld      A, 1
-        ld      (ball_vy), A
+        ld      IX, ball_struct         ; Init ball
+        ld      (IX+BALL_X), 0
+        ld      (IX+BALL_Y), 0
+        ld      (IX+BALL_VELY), 10
+        ld      (IX+BALL_VELX), 10
+        ld      (IX+BALL_DIRX), 0
+        ld      (IX+BALL_DIRY), 0
 
         ld      A, 56                   ; Init pad
         ld      (pad_x), A
@@ -53,15 +52,19 @@ _loop:
         and     0b00000011
         jr      NZ, _loop
 
-        call    move_ball               ; Move ball and clear screen in old position
+        call    move_ball               ; Move ball
 
         call    draw_pad                ; Draw pad
 
+        ld      A, 1
+        ld      (debug), A
         call    draw_ball               ; Draw ball
+        ld      A, 0
+        ld      (debug), A
 
 
-        ld      IX, ball_x              ; Move ball according to velocity
-        inc      (IX+4)               ; Move pad by 1
+        ld      IX, pad_x              ; Move ball according to velocity
+        inc     (IX+0)               ; Move pad by 1
 
         jr      _loop
 
@@ -124,6 +127,82 @@ _draw_bricks_line_loop:
         ret
 
 
+
+; Args:
+; - IX: Ball struct
+; Ret:
+; - A: Tile it collided with
+; Affects:
+; - BC
+; - HL
+ball_collide:
+; I want to end up with tile number in C, which is equal to (X/8 + Y/5 * 16), so I can go directly
+; to the tile map
+        ld      C, (IX+BALL_X)              ; Load X position and divide by 8
+        sla     C
+        sla     C
+        sla     C
+
+        ld      A, (IX+BALL_Y)              ; Divide A by 5 by substracting 5 until it becomes
+        ld      B, -1                       ; negative. Result will be in B
+_ball_collide_sub_5:
+        inc     B
+        sub     A, 5
+        jp      P, _ball_collide_sub_5
+
+        ld      A, C                        ; Add 16*B
+_ball_collide_add_16:
+        add     A, 16
+        djnz    _ball_collide_add_16
+
+        ld      H, tiles/255                ; Load tile in the position
+        ld      L, A
+        ld      A, (HL)
+
+        ld      (HL), 0                     ; Remove brick
+        ret
+
+
+
+; Args:
+; - Nothing
+; Ret:
+; - A: 255 if no move, 0 if moved.
+; Affects:
+; - All
+; Moves ball in Y direction if the time says so, checking collisions with blocks and returns which
+; movement happened
+move_ball_y:
+; Check if I have to move in y
+        ld      IX, ball_struct             ; Check if velocity + counter overflows which means
+        ld      A, (IX+BALL_CNTY)           ; we move the ball this frame
+        add     A, (IX+BALL_VELY)
+        ld      (IX+BALL_CNTY), A
+        ld      A, 255                      ; Leave A as 255 just in case we return A
+        ret     NC
+
+        bit     0, (IX+BALL_DIRY)           ; Check if we are going up or down
+        jr      Z, _move_ball_y_down        ; Bit not set means we move down
+
+_move_ball_y_up:
+        dec     (IX+BALL_Y)                 ; Move down
+        call    ball_collide                ; Collide with bricks
+        cp      0                           ; Return if there was no colission. A will be 0
+        ret     Z
+        inc     (IX+BALL_Y)                 ; Revert the going down
+        set     0, (IX+BALL_DIRY)           ; Store that ball is going up
+        jr      _move_ball_y_down           ; Move up
+
+_move_ball_y_down:
+        inc     (IX+BALL_Y)                 ; Move down
+        call    ball_collide                ; Collide with bricks
+        cp      0                           ; Return if there was no colission. A will be 0
+        ret     Z
+        dec     (IX+BALL_Y)                 ; Revert the going down
+        set     0, (IX+BALL_DIRY)           ; Store that ball is going up
+        jr      _move_ball_y_up             ; Move up
+
+
 ; Args:
 ; - Nothing
 ; Ret:
@@ -131,88 +210,59 @@ _draw_bricks_line_loop:
 ; Affects:
 ; - All
 move_ball:
-        ld      DE, (ball_xy)               ; D<-y, E<-x
-        ld      A, 0b00000111               ; A will hold the modulo 8 of X position
-        and     E
-        srl     E                           ; E will hold the X in tiles, which is X/8
-        srl     E
-        srl     E
-        cp      7                           ; If X is modulo 7, we have to draw two tiles as below
-        jr      Z, _move_ball_wrapped
-_move_ball_normal:
-        call    lcd_wait
-        ld      A, D                        ; Write Y address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, E                        ; Write X address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, 0                        ; Write zeros
-        out     IO_LCD_W_MEM, A
-        inc     D                           ; Now do it again one line below
-        call    lcd_wait
-        ld      A, D                        ; Write Y address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, E                        ; Write X address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, 0                        ; Write zeros
-        out     IO_LCD_W_MEM, A
-        jr      _move_ball_end
-_move_ball_wrapped:
-        call    lcd_wait
-        ld      A, D                        ; Write Y address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, E                        ; Write X address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, 0                        ; Write zeros
-        out     IO_LCD_W_MEM, A
-        call    lcd_wait
-        ld      A, 0                        ; Write zeros
-        out     IO_LCD_W_MEM, A
-        inc     D                           ; Now do it again one line below
-        call    lcd_wait
-        ld      A, D                        ; Write Y address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, E                        ; Write X address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, 0                        ; Write zeros
-        out     IO_LCD_W_MEM, A
-        call    lcd_wait
-        ld      A, 0                        ; Write zeros
-        out     IO_LCD_W_MEM, A
-_move_ball_end:
-        ld      IX, ball_x                  ; Move ball according to velocity
-        ld      A, (IX+0)
-        add     A, (IX+2)
-        ld      (IX+0), A
-        ld      A, (IX+1)
-        add     A, (IX+3)
-        ld      (IX+1), A
+        ld      IX, ball_struct
+        bit     0, (IX+BALL_DIRX)
+        jr      NZ, _move_ball_left
+_move_ball_right:
+        inc     (IX+BALL_X)
+        jr      _move_ball_vert
+_move_ball_left:
+        dec     (IX+BALL_X)
+
+_move_ball_vert:
+        bit     0, (IX+BALL_DIRY)
+        jr      NZ, _move_ball_up
+_move_ball_down:
+        inc     (IX+BALL_Y)
+        ret
+_move_ball_up:
+        dec     (IX+BALL_Y)
         ret
 
 
 ; Args:
+; - B: Byte
+; - D: Y address
+; - E: X address
+; Ret:
 ; - Nothing
+; Affects:
+; - A
+draw_byte:
+        call    lcd_wait
+        ld      A, D                        ; Write Y address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, E                        ; Write X address
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
+        ld      A, B                        ; Write sprite line
+        out     IO_LCD_W_MEM, A
+        ret
+
+
+; Args:
+; - IX: Ball struct
 ; Ret:
 ; - Nothing
 ; Affects:
 ; - All
 draw_ball:
-        ld      DE, (ball_xy)               ; D<-y, E<-x
+        ld      IX, ball_struct
+        ld      D, (IX+BALL_Y)
+        ld      E, (IX+BALL_X)
         ld      A, 0b00000111               ; A will hold the modulo 8 of X position
         and     E
         srl     E                           ; E will hold the X in tiles, which is X/8
@@ -220,62 +270,61 @@ draw_ball:
         srl     E
         cp      7                           ; If X is modulo 7, we have to draw two tiles as below
         jr      Z, _draw_ball_wrapped
+
 _draw_ball_normal:
         ld      H, lut_ball/255             ; Get sprite to draw in LUT, lut_ball is 256-aligned
         ld      L, A
-        call    lcd_wait
-        ld      A, D                        ; Write Y address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, E                        ; Write X address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, (HL)                     ; Write sprite line
-        out     IO_LCD_W_MEM, A
+
+        bit     0, (IX+BALL_DIRY)           ; If 0, we are going down so we have to clear the
+        jr      NZ, _draw_ball_normal_2     ; graphics one pixel above, in (y, x) = (D-1, E)
+        dec     D
+        ld      B, 0
+        call    draw_byte
+        inc     D
+
+_draw_ball_normal_2:
+        ld      B, (HL)                     ; Draw sprite in DE
+        call    draw_byte
         inc     D                           ; Now do it again one line below
-        call    lcd_wait
-        ld      A, D                        ; Write Y address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, E                        ; Write X address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, (HL)                     ; Write sprite line
-        out     IO_LCD_W_MEM, A
+        call    draw_byte
+
+        bit     0, (IX+BALL_DIRY)           ; If 1, we are going up so we have to clear the
+        ret     Z                           ; graphics one line below
+        inc     D
+        ld      B, 0
+        call    draw_byte
         ret
+
 _draw_ball_wrapped:
+        bit     0, (IX+BALL_DIRY)           ; If 0, we are going down so we have to clear the
+        jr      NZ, _draw_ball_normal_2     ; graphics one pixel above, in (y, x) = (D-1, E)
+        dec     D
+        ld      B, 0
+        call    draw_byte
         call    lcd_wait
-        ld      A, D                        ; Write Y address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, E                        ; Write X address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, 0b00000001               ; Draw one pixel in the right
+        ld      A, 0
         out     IO_LCD_W_MEM, A
+        inc     D
+
+_draw_ball_wrapped_2:
+        ld      B, 0b00000001               ; Draw one pixel in the right in DE
+        call    draw_byte
         call    lcd_wait
-        ld      A, 0b10000000               ; Draw one pixel in the left
+        ld      A, 0b10000000               ; Draw one pixel in the left in the tile in the right
         out     IO_LCD_W_MEM, A
         inc     D                           ; Now do it again one line below
+        call    draw_byte
         call    lcd_wait
-        ld      A, D                        ; Write Y address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, E                        ; Write X address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, 0b00000001               ; Draw one pixel in the right
+        ld      A, 0b10000000
         out     IO_LCD_W_MEM, A
+
+        bit     0, (IX+BALL_DIRY)           ; If 1, we are going up so we have to clear the
+        ret     Z                           ; graphics one line below
+        inc     D
+        ld      B, 0
+        call    draw_byte
         call    lcd_wait
-        ld      A, 0b10000000               ; Draw one pixel in the left
+        ld      A, 0
         out     IO_LCD_W_MEM, A
         ret
 
@@ -412,7 +461,7 @@ sprite_pad:     db      0b00111111      ; Left edge
                 db      0b11111100
 
                 .align  0x0100
-lut_ball:       db      0b11000000      ; This is a lool up table for ball positions modulo 0 to 6
+lut_ball:       db      0b11000000      ; This is a look up table for ball positions modulo 0 to 6
                 db      0b01100000
                 db      0b00110000
                 db      0b00011000
@@ -428,14 +477,29 @@ lives:          data    1
 level:          data    1
                 align   0x0100
 tiles:          data    16*8            ; Tiles, or state of the bricks of the level
+ball_struct:                            ; Contain several fields accessable with IX
+BALL_X:         equ     0
+BALL_Y:         equ     1
+BALL_VELX:      equ     2
+BALL_VELY:      equ     3
+BALL_DIRX:      equ     4
+BALL_DIRY:      equ     5
+BALL_CNTX:      equ     6
+BALL_CNTY:      equ     7
 ; Positon in pixels
 ball_xy:                                ; ld BC,(ball_xy) will do B<-y, C<-x
 ball_x:         data    1
 ball_y:         data    1
-; Velocity in pixels/frame
+; Velocity in pixels/frame/255
 ball_vxvy:                              ; ld BC,(ball_vxvy) will do B<-vy, C<-vx
 ball_vx:        data    1
 ball_vy:        data    1
+; Move counter, so position is changed when it reaches 255
+ball_cxcy:                              ; ld BC,(ball_xy) will do B<-y, C<-x
+ball_cx:        data    1
+ball_cy:        data    1
+
+
 pad_x:          data    1
 ; Length in 8px tiles
 pad_len:        data    1
