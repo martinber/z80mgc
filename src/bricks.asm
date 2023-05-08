@@ -32,10 +32,10 @@ reset:
         ldir
 
         ld      IX, ball_struct         ; Init ball
-        ld      (IX+BALL_X), 82
-        ld      (IX+BALL_Y), 30
-        ld      (IX+BALL_VELY), 100
-        ld      (IX+BALL_VELX), 100
+        ld      (IX+BALL_X), 20
+        ld      (IX+BALL_Y), 18
+        ld      (IX+BALL_VELY), 60
+        ld      (IX+BALL_VELX), 60
         ld      (IX+BALL_DIRX), 0
         ld      (IX+BALL_DIRY), 1
 
@@ -48,21 +48,25 @@ reset:
 
 _loop:
         halt
-        ld      A, (timer_0)            ; Continue waiting if less than 8 ticks passed
-        and     0b00000011
-        jr      NZ, _loop
+        ; ld      A, (timer_0)            ; Continue waiting if less than 2 ticks passed
+        ; and     0b00000001
+        ; jr      NZ, _loop
 
-        ld      A, 1
-        ld      (debug), A
+        ld      HL, sprite_air
+        ld      C, 0
+        call    draw_ball               ; Clear ball
+
+        ; ld      A, 1
+        ; ld      (debug), A
         call    move_ball_x             ; Move ball
         call    move_ball_y             ; Move ball
-        ld      A, 0
-        ld      (debug), A
+        ; ld      A, 0
+        ; ld      (debug), A
 
         call    draw_pad                ; Draw pad
 
-        call    draw_ball_v               ; Draw ball
-        call    draw_ball_h               ; Draw ball
+        ld      C, 1
+        call    draw_ball               ; Draw ball
 
 
         ld      IX, pad_x              ; Move ball according to velocity
@@ -105,6 +109,7 @@ _draw_bricks_line_loop:
         call    lcd_wait
         ld      A, (_cur_y)                 ; Set Y address, already in OR with flag
         add     B
+        dec     A                           ; I dont know why I have to do this
         out     IO_LCD_W_INSTR, A
         call    lcd_wait
         ld      A, E                        ; Set X address, I have to modulo by 16 and OR with flag
@@ -137,6 +142,12 @@ _draw_bricks_line_loop:
 ; Affects:
 ; - BC
 ; - HL
+; The ball has 4 corners (UL, UR, LL, LR). The corners used for collision detection are LL or LR
+; depending if the ball is going left or right. Upper corners are not used because the bricks are
+; 5px tall but the sprite is 4px tall, so using only LL and LR work out. Another detail is that when
+; ball is going direction down-right and we check only LR, it will clip if the collission only
+; happens in UR, but since the bricks have no graphics in the bottom part then this cliiping gives
+; no problems
 ball_collide:
 ; I want to end up with tile number in C, which is equal to (X/8 + Y/5 * 16), so I can go directly
 ; to the tile map
@@ -151,13 +162,9 @@ _ball_collide_div_x:
         srl     C
         srl     C
 
-
         ld      A, (IX+BALL_Y)              ; Divide A by 5 by substracting 5 until it becomes
         ld      B, -1                       ; negative. Result will be in B
-
-        bit     0, (IX+BALL_DIRY)           ; If going down, add 1 so we check bottom edge of ball
-        jr      NZ, _ball_collide_div_y
-        inc     A
+        inc     A                           ; Add 1 so we check bottom edge of ball
 
 _ball_collide_div_y:
         cp      8*5                         ; Skip checking collision if A larger than 8*5, because
@@ -212,13 +219,13 @@ move_ball_y:
         jr      Z, _move_ball_y_down        ; Bit not set means we move down
 
 _move_ball_y_up:
-        dec     (IX+BALL_Y)                 ; Move down
+        dec     (IX+BALL_Y)                 ; Move up
         call    ball_collide                ; Collide with bricks
         cp      TILE_AIR                    ; Return if there was no colission
         ret     Z
-        inc     (IX+BALL_Y)                 ; Revert the going down
-        res     0, (IX+BALL_DIRY)           ; Store that ball is going up
-        jr      _move_ball_y_down           ; Move up
+        inc     (IX+BALL_Y)                 ; Revert the going up
+        res     0, (IX+BALL_DIRY)           ; Store that ball is going down
+        jr      _move_ball_y_down           ; Move down
 
 _move_ball_y_down:
         inc     (IX+BALL_Y)                 ; Move down
@@ -319,150 +326,53 @@ draw_byte:
         out     IO_LCD_W_MEM, A
         ret
 
-
 ; Args:
 ; - IX: Ball struct
+; - C: If bit 0 = 0, will draw what is on (HL), which should be sprite_air so nothing is drawn
 ; Ret:
 ; - Nothing
 ; Affects:
 ; - All
-draw_ball_h:
-        ld      IX, ball_struct
-        ld      D, (IX+BALL_Y)
-        ld      E, (IX+BALL_X)
-        ld      A, 0b00000111               ; A and L will hold the modulo 8 of X position
-        and     E
-        ld      L, A
-        srl     E                           ; E will hold the X in tiles, which is X/8
-        srl     E
-        srl     E
+draw_ball:
 
-        cp      7                           ; If X is modulo 7, we have to draw two tiles as below
-        jr      Z, _draw_ball_h_wrapped
-        cp      0                           ; If X is modulo 0, we might have to clear left tile
-        jr      Z, _draw_ball_h_first
-        jr      _draw_ball_h_normal         ; Otherwise draw normally the two lines
-
-_draw_ball_h_first:
-        bit     0, (IX+BALL_DIRX)           ; Will clear at the left tile only if going right
-        jr      NZ, _draw_ball_h_normal
-        dec     E                           ; Move left one tile
-        ld      B, 0                        ; Draw 0 in DE
-        call    draw_byte
-        inc     D                           ; Now do it again one line below
-        call    draw_byte
-        inc     E                           ; Go back right and continue normally
-        dec     D
-
-_draw_ball_h_normal:
-        ld      H, lut_ball/255             ; Get sprite to draw in LUT, lut_ball is 256-aligned and
-                                            ; the offset is already in L
-
-        ld      B, (HL)                     ; Draw sprite in DE
-        call    draw_byte
-        inc     D                           ; Now do it again one line below
-        call    draw_byte
-
-        ld      A, L                        ; If X is modulo 6, we might have to clear right tile
-        cp      6
-        ret     NZ                          ; Return if X is not modulo 6
-        bit     0, (IX+BALL_DIRX)           ; Return if moving right
-        ret     Z
-
-        inc     E                           ; Then we move right and clear
-        dec     D
-        ld      B, 0
-        call    draw_byte
-        inc     D
-        call    draw_byte
-        ret
-
-_draw_ball_h_wrapped:
-        ld      B, 0b00000001               ; Draw one pixel in the right in DE
-        call    draw_byte
-        call    lcd_wait
-        ld      A, 0b10000000               ; Draw one pixel in the left in the tile in the right
-        out     IO_LCD_W_MEM, A
-        inc     D                           ; Now do it again one line below
-        call    draw_byte
-        call    lcd_wait
-        ld      A, 0b10000000
-        out     IO_LCD_W_MEM, A
-        ret
-
-
-; Args:
-; - IX: Ball struct
-; Ret:
-; - Nothing
-; Affects:
-; - All
-draw_ball_v:
         ld      IX, ball_struct
         ld      D, (IX+BALL_Y)
         ld      E, (IX+BALL_X)
         ld      A, 0b00000111               ; A will hold the modulo 8 of X position
         and     E
+
+        bit     0, C                        ; If A is zero, we will draw what (HL) has
+        jr      Z, _draw_ball_get_x
+        ld      H, lut_ball/255             ; In (HL) get line to draw in LUT, lut_ball is
+                                            ; 256-aligned.
+        ld      L, A                        ; Put modulo of X position in A
+
+_draw_ball_get_x:
         srl     E                           ; E will hold the X in tiles, which is X/8
         srl     E
         srl     E
-        cp      7                           ; If X is modulo 7, we have to draw two tiles as below
-        jr      Z, _draw_ball_v_wrapped
 
-_draw_ball_v_normal:
-        ld      H, lut_ball/255             ; Get sprite to draw in LUT, lut_ball is 256-aligned
-        ld      L, A
+        cp      7                           ; If X is modulo 7, we have to draw two tiles
+        jr      Z, _draw_ball_wrapped
 
-        bit     0, (IX+BALL_DIRY)           ; If 0, we are going down so we have to clear the
-        jr      NZ, _draw_ball_v_normal_2   ; graphics one pixel above, in (y, x) = (D-1, E)
-        dec     D
-        ld      B, 0
-        call    draw_byte
-        inc     D
-
-_draw_ball_v_normal_2:
+_draw_ball_normal:
         ld      B, (HL)                     ; Draw sprite in DE
         call    draw_byte
         inc     D                           ; Now do it again one line below
         call    draw_byte
-
-        bit     0, (IX+BALL_DIRY)           ; If 1, we are going up so we have to clear the
-        ret     Z                           ; graphics one line below
-        inc     D
-        ld      B, 0
-        call    draw_byte
         ret
 
-_draw_ball_v_wrapped:
-        bit     0, (IX+BALL_DIRY)           ; If 0, we are going down so we have to clear the
-        jr      NZ, _draw_ball_v_normal_2   ; graphics one pixel above, in (y, x) = (D-1, E)
-        dec     D
-        ld      B, 0
+_draw_ball_wrapped:
+        ld      B, C                        ; Draw one pixel in the right in DE, or nothing if C=0
         call    draw_byte
         call    lcd_wait
-        ld      A, 0
-        out     IO_LCD_W_MEM, A
-        inc     D
-
-_draw_ball_v_wrapped_2:
-        ld      B, 0b00000001               ; Draw one pixel in the right in DE
-        call    draw_byte
-        call    lcd_wait
-        ld      A, 0b10000000               ; Draw one pixel in the left in the tile in the right
+        rrc     C                           ; Draw one pixel in the left in the tile in the right if
+        ld      A, C                        ; C = 1
         out     IO_LCD_W_MEM, A
         inc     D                           ; Now do it again one line below
         call    draw_byte
         call    lcd_wait
-        ld      A, 0b10000000
-        out     IO_LCD_W_MEM, A
-
-        bit     0, (IX+BALL_DIRY)           ; If 1, we are going up so we have to clear the
-        ret     Z                           ; graphics one line below
-        inc     D
-        ld      B, 0
-        call    draw_byte
-        call    lcd_wait
-        ld      A, 0
+        ld      A, C
         out     IO_LCD_W_MEM, A
         ret
 
