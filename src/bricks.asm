@@ -32,12 +32,12 @@ reset:
         ldir
 
         ld      IX, ball_struct         ; Init ball
-        ld      (IX+BALL_X), 0
-        ld      (IX+BALL_Y), 0
-        ld      (IX+BALL_VELY), 10
-        ld      (IX+BALL_VELX), 10
+        ld      (IX+BALL_X), 82
+        ld      (IX+BALL_Y), 30
+        ld      (IX+BALL_VELY), 100
+        ld      (IX+BALL_VELX), 100
         ld      (IX+BALL_DIRX), 0
-        ld      (IX+BALL_DIRY), 0
+        ld      (IX+BALL_DIRY), 1
 
         ld      A, 56                   ; Init pad
         ld      (pad_x), A
@@ -52,16 +52,17 @@ _loop:
         and     0b00000011
         jr      NZ, _loop
 
-        call    move_ball               ; Move ball
+        ld      A, 1
+        ld      (debug), A
+        call    move_ball_x             ; Move ball
+        call    move_ball_y             ; Move ball
+        ld      A, 0
+        ld      (debug), A
 
         call    draw_pad                ; Draw pad
 
-        ld      A, 1
-        ld      (debug), A
         call    draw_ball_v               ; Draw ball
         call    draw_ball_h               ; Draw ball
-        ld      A, 0
-        ld      (debug), A
 
 
         ld      IX, pad_x              ; Move ball according to velocity
@@ -139,28 +140,53 @@ _draw_bricks_line_loop:
 ball_collide:
 ; I want to end up with tile number in C, which is equal to (X/8 + Y/5 * 16), so I can go directly
 ; to the tile map
-        ld      C, (IX+BALL_X)              ; Load X position and divide by 8
-        sla     C
-        sla     C
-        sla     C
+        ld      IX, ball_struct
+        ld      C, (IX+BALL_X)              ; Load X position
+        bit     0, (IX+BALL_DIRX)           ; If going right, add 1 so we check right edge of ball
+        jr      NZ, _ball_collide_div_x
+        inc     C
+
+_ball_collide_div_x:
+        srl     C                           ; Divide by 8
+        srl     C
+        srl     C
+
 
         ld      A, (IX+BALL_Y)              ; Divide A by 5 by substracting 5 until it becomes
         ld      B, -1                       ; negative. Result will be in B
+
+        bit     0, (IX+BALL_DIRY)           ; If going down, add 1 so we check bottom edge of ball
+        jr      NZ, _ball_collide_div_y
+        inc     A
+
+_ball_collide_div_y:
+        cp      8*5                         ; Skip checking collision if A larger than 8*5, because
+        jp      P, _ball_collide_ret_air    ; it means it is too far below to be in (tiles) map
+
 _ball_collide_sub_5:
         inc     B
         sub     A, 5
         jp      P, _ball_collide_sub_5
+
+        ld      A, 0                        ; Skip adding the 16 if B is already 0
+        cp      B
+        jr      Z, _ball_collide_ld
 
         ld      A, C                        ; Add 16*B
 _ball_collide_add_16:
         add     A, 16
         djnz    _ball_collide_add_16
 
+_ball_collide_ld:
         ld      H, tiles/255                ; Load tile in the position
         ld      L, A
         ld      A, (HL)
 
-        ld      (HL), 0                     ; Remove brick
+        ld      (HL), TILE_AIR              ; Remove brick
+        ret
+
+_ball_collide_ret_air:
+        ld      A, TILE_AIR
         ret
 
 
@@ -188,20 +214,60 @@ move_ball_y:
 _move_ball_y_up:
         dec     (IX+BALL_Y)                 ; Move down
         call    ball_collide                ; Collide with bricks
-        cp      0                           ; Return if there was no colission. A will be 0
+        cp      TILE_AIR                    ; Return if there was no colission
         ret     Z
         inc     (IX+BALL_Y)                 ; Revert the going down
-        set     0, (IX+BALL_DIRY)           ; Store that ball is going up
+        res     0, (IX+BALL_DIRY)           ; Store that ball is going up
         jr      _move_ball_y_down           ; Move up
 
 _move_ball_y_down:
         inc     (IX+BALL_Y)                 ; Move down
         call    ball_collide                ; Collide with bricks
-        cp      0                           ; Return if there was no colission. A will be 0
+        cp      TILE_AIR                    ; Return if there was no colission
         ret     Z
         dec     (IX+BALL_Y)                 ; Revert the going down
         set     0, (IX+BALL_DIRY)           ; Store that ball is going up
         jr      _move_ball_y_up             ; Move up
+
+
+; Args:
+; - Nothing
+; Ret:
+; - A: 255 if no move, 0 if moved.
+; Affects:
+; - All
+; Moves ball in X direction if the time says so, checking collisions with blocks and returns which
+; movement happened
+move_ball_x:
+; Check if I have to move in y
+        ld      IX, ball_struct             ; Check if velocity + counter overflows which means
+        ld      A, (IX+BALL_CNTX)           ; we move the ball this frame
+        add     A, (IX+BALL_VELX)
+        ld      (IX+BALL_CNTX), A
+        ld      A, 255                      ; Leave A as 255 just in case we return A
+        ret     NC
+
+        bit     0, (IX+BALL_DIRX)           ; Check if we are going up or down
+        jr      Z, _move_ball_x_right       ; Bit not set means we move down
+
+_move_ball_x_left:
+        dec     (IX+BALL_X)                 ; Move left
+        call    ball_collide                ; Collide with bricks
+        cp      TILE_AIR                    ; Return if there was no colission
+        ret     Z
+        inc     (IX+BALL_X)                 ; Revert the going left
+        res     0, (IX+BALL_DIRX)           ; Store that ball is going right
+        jr      _move_ball_x_right          ; Move right
+
+_move_ball_x_right:
+        inc     (IX+BALL_X)                 ; Move right
+        call    ball_collide                ; Collide with bricks
+        cp      TILE_AIR                    ; Return if there was no colission
+        ret     Z
+        dec     (IX+BALL_X)                 ; Revert the going right
+        set     0, (IX+BALL_DIRX)           ; Store that ball is going left
+        jr      _move_ball_x_left           ; Move left
+
 
 
 ; Args:
@@ -566,6 +632,10 @@ ball_y:         data    1
 ball_vxvy:                              ; ld BC,(ball_vxvy) will do B<-vy, C<-vx
 ball_vx:        data    1
 ball_vy:        data    1
+; Velocity direction 1 means up or right
+ball_dxdy:                              ; ld BC,(ball_vxvy) will do B<-vy, C<-vx
+ball_dx:        data    1
+ball_dy:        data    1
 ; Move counter, so position is changed when it reaches 255
 ball_cxcy:                              ; ld BC,(ball_xy) will do B<-y, C<-x
 ball_cx:        data    1
