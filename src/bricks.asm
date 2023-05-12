@@ -32,17 +32,17 @@ reset:
         ldir
 
         ld      IX, ball_struct         ; Init ball
-        ld      (IX+BALL_X), 20
+        ld      (IX+BALL_X), 52
         ld      (IX+BALL_Y), 18
-        ld      (IX+BALL_VELY), 60
+        ld      (IX+BALL_VELY), 30
         ld      (IX+BALL_VELX), 60
-        ld      (IX+BALL_DIRX), 0
+        ld      (IX+BALL_DIRX), 1
         ld      (IX+BALL_DIRY), 1
 
         ld      A, 56                   ; Init pad
         ld      (pad_x), A
-        ld      A, 3
-        ld      (pad_len), A
+        ld      A, 14                   ; 14 instead of 16 because pad has 2 empty pixels in the
+        ld      (pad_w), A              ; edges
 
         call    draw_bricks             ; Draw bricks
 
@@ -56,12 +56,16 @@ _loop:
         ld      C, 0
         call    draw_ball               ; Clear ball
 
+        call    move_ball_x             ; Move ball and collide with bricks and walls
+        call    move_ball_y
+
         ; ld      A, 1
         ; ld      (debug), A
-        call    move_ball_x             ; Move ball
-        call    move_ball_y             ; Move ball
+        call    pad_collide             ; Collide with pad
         ; ld      A, 0
         ; ld      (debug), A
+
+        call    move_pad
 
         call    draw_pad                ; Draw pad
 
@@ -69,11 +73,7 @@ _loop:
         call    draw_ball               ; Draw ball
 
 
-        ld      IX, pad_x              ; Move ball according to velocity
-        inc     (IX+0)               ; Move pad by 1
-
         jr      _loop
-
 
 
 ; Args:
@@ -134,57 +134,177 @@ _draw_bricks_line_loop:
         ret
 
 
+; Args:
+; - IX: Ball struct
+; Ret:
+; -
+; Affects:
+; - All
+; Keep in mind that pad sprite has an empty pixel on each side, and that the ball position is of the
+; bottom left corner
+pad_collide:
+        ld      IX, ball_struct
+        ld      A, (IX+BALL_Y)              ; Load ball_y position
+        cp      59                          ; Return if ball is too high
+        ret     M
+        ld      B, A                        ; Put ball_y in B
+
+        ld      A, (IX+BALL_X)              ; Load ball_x position in C
+        ld      C, A
+
+        ld      A, (pad_x)                  ; Put pad_left_x in D
+        ld      D, A
+
+        ld      A, (pad_w)                  ; Add pad width to X to obtain pad_right_x in E
+        add     D
+        ld      E, A
+
+        ld      A, C                        ; If ball_x < pad_left_x, return since ball at left
+        sub     D
+        ret     M
+
+        ld      A, E                        ; If pad_right_x < ball_x, return since ball at right
+        sub     C
+        ret     M
+
+        ld      A, (pad_w)                  ; Get middle position of pad: pad_left_x + pad_w/2
+        sra     A
+        add     D
+        sub     C                           ; Substract pad_x to get distance from ball,
+                                            ; where -1 means ball is 1px to the
+                                            ; right of pad, and +6 means 6px to the left
+
+        ld      C, A                        ; Save in C
+
+        jp      P, _pad_collide_l           ; If result > 0, then colliding with left edge
+
+_pad_collide_r:
+        ld      A, 61                       ; Check if Y is too low
+        cp      B
+        jp      M, _pad_collide_r_low
+
+        ld      (IX+BALL_DIRY), 1           ; Bounce upwards
+        dec     (IX+BALL_Y)
+        jr      _pad_collide_calc_vx
+
+_pad_collide_r_low:
+        ld      (IX+BALL_DIRX), 0           ; Bounce right
+        inc     (IX+BALL_X)
+        ret
+
+_pad_collide_l:
+        ld      A, 61                       ; Check if Y is too low
+        cp      B
+        jp      M, _pad_collide_l_low
+        ld      (IX+BALL_DIRY), 1           ; Bounce upwards
+        dec     (IX+BALL_Y)
+        jr      _pad_collide_calc_vx
+
+_pad_collide_l_low:
+        ld      (IX+BALL_DIRX), 1           ; Bounce left
+        dec     (IX+BALL_X)
+        ret
+
+_pad_collide_calc_vx:
+        ld      A, (IX+BALL_VELX)           ; Load horizontal speed of ball
+        bit     0, (IX+BALL_DIRX)           ; Check if negative
+        jr      Z, _pad_collide_calc_vx_pos
+
+_pad_collide_calc_vx_neg:
+        add     C                           ; Add offset to X speed
+        add     C                           ; Add offset to X speed
+        add     C                           ; Add offset to X speed
+        jp      M, _pad_collide_set_vx_pos  ; Invert if it became negative
+        ld      (IX+BALL_VELX), A
+        ret
+
+_pad_collide_set_vx_pos:
+        neg
+        ld      (IX+BALL_VELX), A
+        res     0, (IX+BALL_DIRX)
+        ret
+
+_pad_collide_calc_vx_pos:
+        sub     C                           ; Subtract offset to X speed
+        sub     C                           ; Subtract offset to X speed
+        sub     C                           ; Subtract offset to X speed
+        jp      M, _pad_collide_set_vx_neg  ; Invert if it became negative
+        ld      (IX+BALL_VELX), A
+        ret
+
+_pad_collide_set_vx_neg:
+        neg
+        ld      (IX+BALL_VELX), A
+        set     0, (IX+BALL_DIRX)
+        ret
+
 
 ; Args:
 ; - IX: Ball struct
 ; Ret:
 ; - A: Tile it collided with
+; - HL: Tile memory address
 ; Affects:
 ; - BC
-; - HL
 ; The ball has 4 corners (UL, UR, LL, LR). The corners used for collision detection are LL or LR
 ; depending if the ball is going left or right. Upper corners are not used because the bricks are
 ; 5px tall but the sprite is 4px tall, so using only LL and LR work out. Another detail is that when
 ; ball is going direction down-right and we check only LR, it will clip if the collission only
 ; happens in UR, but since the bricks have no graphics in the bottom part then this cliiping gives
 ; no problems
-ball_collide:
+; TODO: Should check collission in LR px and if the modulo is 0 then also directly check the tile in
+; the left
+brick_collide:
 ; I want to end up with tile number in C, which is equal to (X/8 + Y/5 * 16), so I can go directly
 ; to the tile map
         ld      IX, ball_struct
-        ld      C, (IX+BALL_X)              ; Load X position
+        ld      A, (IX+BALL_X)              ; Load X position
+
+        cp      0                           ; Check if too far left
+        jp      M, _brick_collide_bound
+
+        cp      127                         ; Check if too far right, 127 instead of 128 because
+        jp      P, _brick_collide_bound     ; ball is 2px wide
+
+        ld      C, A                        ; Load X position in C
         bit     0, (IX+BALL_DIRX)           ; If going right, add 1 so we check right edge of ball
-        jr      NZ, _ball_collide_div_x
+        jr      NZ, _brick_collide_div_x
         inc     C
 
-_ball_collide_div_x:
+_brick_collide_div_x:
         srl     C                           ; Divide by 8
         srl     C
         srl     C
 
         ld      A, (IX+BALL_Y)              ; Divide A by 5 by substracting 5 until it becomes
         ld      B, -1                       ; negative. Result will be in B
+
+        cp      0                           ; Check if too far up
+        jp      M, _brick_collide_bound
+
+        cp      64                          ; Check if too far down TODO remove
+        jp      P, reset
+
         inc     A                           ; Add 1 so we check bottom edge of ball
 
-_ball_collide_div_y:
-        cp      8*5                         ; Skip checking collision if A larger than 8*5, because
-        jp      P, _ball_collide_ret_air    ; it means it is too far below to be in (tiles) map
+_brick_collide_div_y:
+        cp      8*5                         ; If A larger than 8*5, return because it is too far
+        jp      P, _brick_collide_air       ; below to be in (tiles) map
 
-_ball_collide_sub_5:
+_brick_collide_sub_5:
         inc     B
         sub     A, 5
-        jp      P, _ball_collide_sub_5
+        jp      P, _brick_collide_sub_5
 
-        ld      A, 0                        ; Skip adding the 16 if B is already 0
-        cp      B
-        jr      Z, _ball_collide_ld
-
-        ld      A, C                        ; Add 16*B
-_ball_collide_add_16:
+        ld      A, 0                        ; Skip adding the 16 if B is already 0, and we will
+        cp      B                           ; Calculate C + 16*B in A
+        ld      A, C
+        jr      Z, _brick_collide_ld
+_brick_collide_add_16:
         add     A, 16
-        djnz    _ball_collide_add_16
+        djnz    _brick_collide_add_16
 
-_ball_collide_ld:
+_brick_collide_ld:
         ld      H, tiles/255                ; Load tile in the position
         ld      L, A
         ld      A, (HL)
@@ -192,9 +312,34 @@ _ball_collide_ld:
         ld      (HL), TILE_AIR              ; Remove brick
         ret
 
-_ball_collide_ret_air:
+_brick_collide_air:
         ld      A, TILE_AIR
         ret
+
+_brick_collide_bound:
+        ld      A, 255
+        ret
+
+
+move_pad:
+        in      A, IO_BUT_R                 ; Load button states in B
+        ld      B, A
+        bit     BUTTON_L, B                 ; Move if button was pressed
+        jr      NZ, _move_pad_left
+        bit     BUTTON_R, B
+        jr      NZ, _move_pad_right
+        ret
+
+_move_pad_right:
+        ld      HL, pad_x                   ; Move pad by 1
+        inc     (HL)
+        ret
+
+_move_pad_left:
+        ld      HL, pad_x                   ; Move pad by 1
+        dec     (HL)
+        ret
+
 
 
 
@@ -209,8 +354,9 @@ _ball_collide_ret_air:
 move_ball_y:
 ; Check if I have to move in y
         ld      IX, ball_struct             ; Check if velocity + counter overflows which means
-        ld      A, (IX+BALL_CNTY)           ; we move the ball this frame
-        add     A, (IX+BALL_VELY)
+        ld      A, (IX+BALL_VELY)           ; we move the ball this frame
+        sla     A                           ; Shift to multiply velocity by 2 and make game faster
+        add     A, (IX+BALL_CNTY)
         ld      (IX+BALL_CNTY), A
         ld      A, 255                      ; Leave A as 255 just in case we return A
         ret     NC
@@ -220,20 +366,22 @@ move_ball_y:
 
 _move_ball_y_up:
         dec     (IX+BALL_Y)                 ; Move up
-        call    ball_collide                ; Collide with bricks
+        call    brick_collide               ; Collide with bricks
         cp      TILE_AIR                    ; Return if there was no colission
         ret     Z
         inc     (IX+BALL_Y)                 ; Revert the going up
         res     0, (IX+BALL_DIRY)           ; Store that ball is going down
+        call    draw_bricks                 ; TODO: Draw single brick
         jr      _move_ball_y_down           ; Move down
 
 _move_ball_y_down:
         inc     (IX+BALL_Y)                 ; Move down
-        call    ball_collide                ; Collide with bricks
+        call    brick_collide               ; Collide with bricks
         cp      TILE_AIR                    ; Return if there was no colission
         ret     Z
         dec     (IX+BALL_Y)                 ; Revert the going down
         set     0, (IX+BALL_DIRY)           ; Store that ball is going up
+        call    draw_bricks                 ; TODO: Draw single brick
         jr      _move_ball_y_up             ; Move up
 
 
@@ -248,8 +396,9 @@ _move_ball_y_down:
 move_ball_x:
 ; Check if I have to move in y
         ld      IX, ball_struct             ; Check if velocity + counter overflows which means
-        ld      A, (IX+BALL_CNTX)           ; we move the ball this frame
-        add     A, (IX+BALL_VELX)
+        ld      A, (IX+BALL_VELX)           ; we move the ball this frame
+        sla     A                           ; Shift to multiply velocity by 2 and make game faster
+        add     A, (IX+BALL_CNTX)
         ld      (IX+BALL_CNTX), A
         ld      A, 255                      ; Leave A as 255 just in case we return A
         ret     NC
@@ -259,20 +408,22 @@ move_ball_x:
 
 _move_ball_x_left:
         dec     (IX+BALL_X)                 ; Move left
-        call    ball_collide                ; Collide with bricks
+        call    brick_collide               ; Collide with bricks
         cp      TILE_AIR                    ; Return if there was no colission
         ret     Z
         inc     (IX+BALL_X)                 ; Revert the going left
         res     0, (IX+BALL_DIRX)           ; Store that ball is going right
+        call    draw_bricks
         jr      _move_ball_x_right          ; Move right
 
 _move_ball_x_right:
         inc     (IX+BALL_X)                 ; Move right
-        call    ball_collide                ; Collide with bricks
+        call    brick_collide               ; Collide with bricks
         cp      TILE_AIR                    ; Return if there was no colission
         ret     Z
         dec     (IX+BALL_X)                 ; Revert the going right
         set     0, (IX+BALL_DIRX)           ; Store that ball is going left
+        call    draw_bricks
         jr      _move_ball_x_left           ; Move left
 
 
@@ -553,7 +704,7 @@ ball_cy:        data    1
 
 
 pad_x:          data    1
-; Length in 8px tiles
-pad_len:        data    1
+; Length in pixels without counting 2 empty pixels of sprite. So two 8px tiles equal to 14px
+pad_w:          data    1
 ; Variables for draw_bricks
 _cur_y:         data    1

@@ -65,6 +65,15 @@ LCD_DD_ADDR_B2:     equ     0x20        ; Offset to second LCD DDRAM buffer.When
                                         ; bank for double buffering, first line is at 0x20 instead
                                         ; of 0x00
 
+; Buttom map.
+; In the hardware, each one of this bits will be set if the button is pressed and an IN instruction
+; is executed
+; The number corresponds to the bit that has to be checked with BIT
+BUTTON_U:       equ     0 ; 0b00000001, U4
+BUTTON_D:       equ     1 ; 0b00000010, Down
+BUTTON_L:       equ     2 ; 0b00000100, Left
+BUTTON_R:       equ     3 ; 0b00001000, Right
+
 #code Z80MGC_ROM
 
 ; Args:

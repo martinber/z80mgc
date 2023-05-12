@@ -6,14 +6,6 @@ FIELD_WH:       equ     16*8
 FIELD_W_MASK:   equ     0b00001111
 FIELD_H_MASK:   equ     0b00000111
 FIELD_WH_MASK:  equ     0b00011111
-; Buttom map.
-; In the hardware, each one of this bits will be set if the button is pressed and an IN instruction
-; is executed
-; The number corresponds to the bit that has to be checked with BIT
-BUTTON_U:       equ     0 ; 0b00000001, U4
-BUTTON_D:       equ     1 ; 0b00000010, Down
-BUTTON_L:       equ     2 ; 0b00000100, Left
-BUTTON_R:       equ     3 ; 0b00001000, Right
 ; Possible tile values written to RAM, they are also equal to the the sprite number
 TILE_EMPTY:     equ     0x20
 TILE_SN_U:      equ     0x01 ; Snake body moving up
