@@ -18,6 +18,7 @@ TILE_FOOD:      equ     0x05
 
 snake_start::
 reset:
+        ld      SP, stack+STACK_SIZE    ; Set stack
         ld      A, 255
         ld      (prng_seed), A          ; This will be updated each time the prng is run
 

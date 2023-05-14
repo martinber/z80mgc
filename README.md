@@ -203,6 +203,21 @@ Other timer options:
 
 - Z80 CTC
 
+Buzzer can be done in an expansion board:
+
+- An 74HC245 that receives 8 bits of data as input
+
+- The outputs of the 74HC245 go directly to a R-2R resistor ladder to implement a DAC (Digital
+  Analog Converter)
+
+- The output of the DAC goes to a 555 VCO (Voltage Controlled Oscillator). Maybe the bit 7 of the
+  74HC245 should enable and disable the 555
+
+- The output of the 55 goes directly to a buzzer
+
+- In software, I should write a certain number to the I/O port and the buzzer should sound until I
+  write zero
+
 
 PCB design notes
 ----------------
