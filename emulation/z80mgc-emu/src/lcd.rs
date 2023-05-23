@@ -19,13 +19,11 @@ const CHAR_H: usize = 16;
 const SCREEN_W: usize = 128;
 /// Screen height in pixels
 const SCREEN_H: usize = 64;
-/// Number of horizontal words or 8bit blocks in GRAM
-const GRAM_WIDTH: usize = 16;
 
 /// Character Generator RAM. 4 * 16 * 16 bits for 8 double width chars of 16x16px
 type CGRam = [u8; CGRAM_LENGTH];
 const CGRAM_LENGTH: usize = 128;
-                                                              //
+
 /// Display Data RAM: 8 * 4 * 2 words of 16 bits. Each word represents two english characters or one
 /// CGRAM character. 2 banks of 4 rows by 8 columns (where each column is two english characters).
 /// Actually I say "2 banks" but there is no division within banks, you can scroll and display half
@@ -43,6 +41,26 @@ const DDRAM_LINE_ADDR: [usize; 8] = [0x00, 0x10, 0x08, 0x18, 0x20, 0x30, 0x28, 0
 /// Graphic RAM: 128 * 64 * 2 bits, for two banks of 128x64px graphics
 /// Actually I say "2 banks" but there is no division within banks, you can scroll and display half
 /// of each for example.
+/// I think the address is just a unsigned number pointing to GRAM, that is incremented each time a
+/// byte is written. The layout I think is:
+///
+/// Lines 0 to 31:
+/// 0x000 0x001 0x002 0x003 0x004 0x005 0x006 0x007 0x008 0x009 0x00A 0x00B 0x00C 0x00D 0x00E 0x00F
+/// 0x020 0x021 0x022 0x023 0x024 0x025 0x026 0x027 0x028 0x029 0x02A 0x02B 0x02C 0x02D 0x02E 0x02F
+/// 0x040 0x041 0x042 0x043 0x044 0x045 0x046 0x047 0x048 0x049 0x04A 0x04B 0x04C 0x04D 0x04E 0x04F
+/// ...
+/// 0x3A0 0x3A1 0x3A2 0x3A3 0x3A4 0x3A5 0x3A6 0x3A7 0x3A8 0x3A9 0x3AA 0x3AB 0x3AC 0x3AD 0x3AE 0x3AF
+/// 0x3C0 0x3C1 0x3C2 0x3C3 0x3C4 0x3C5 0x3C6 0x3C7 0x3C8 0x3C9 0x3CA 0x3CB 0x3CC 0x3CD 0x3CE 0x3CF
+/// 0x3E0 0x3E1 0x3E2 0x3E3 0x3E4 0x3E5 0x3E6 0x3E7 0x3E8 0x3E9 0x3EA 0x3EB 0x3EC 0x3ED 0x3EE 0x3EF
+///
+/// Lines 32 to 63
+/// 0x010 0x011 0x012 0x013 0x014 0x015 0x016 0x017 0x018 0x019 0x01A 0x01B 0x01C 0x01D 0x01E 0x01F
+/// 0x030 0x031 0x032 0x033 0x034 0x035 0x036 0x037 0x038 0x039 0x03A 0x03B 0x03C 0x03D 0x03E 0x03F
+/// 0x050 0x051 0x052 0x053 0x054 0x055 0x056 0x057 0x058 0x059 0x05A 0x05B 0x05C 0x05D 0x05E 0x05F
+/// ...
+/// 0x3B0 0x3B1 0x3B2 0x3B3 0x3B4 0x3B5 0x3B6 0x3B7 0x3B8 0x3B9 0x3BA 0x3BB 0x3BC 0x3BD 0x3BE 0x3BF
+/// 0x3D0 0x3D1 0x3D2 0x3D3 0x3D4 0x3D5 0x3D6 0x3D7 0x3D8 0x3D9 0x3DA 0x3DB 0x3DC 0x3DD 0x3DE 0x3DF
+/// 0x3F0 0x3F1 0x3F2 0x3F3 0x3F4 0x3F5 0x3F6 0x3F7 0x3F8 0x3F9 0x3FA 0x3FB 0x3FC 0x3FD 0x3FE 0x3FF
 type GRam = [u8; GRAM_LENGTH];
 const GRAM_LENGTH: usize = 2048;
 
@@ -70,8 +88,8 @@ pub struct MgcLcd {
     /// Address Counter AC
     address_counter: usize,
 
-    /// (X, Y) address in GRAM
-    gram_address: (usize, usize),
+    /// Current address in GRAM
+    gram_address: u16,
 
     /// I/D according to documentation. true if cursor moves right or bool if moves left
     direction_right: bool,
@@ -112,7 +130,7 @@ impl MgcLcd {
             gram: [0x00; GRAM_LENGTH],
             extended_instr: false,
             address_counter: 0,
-            gram_address: (0, 0),
+            gram_address: 0,
             direction_right: true,
             shift_on: false,
             display_on: false,
@@ -162,16 +180,21 @@ impl MgcLcd {
 
         if self.graphic_on {
             // Draw graphics
-            for x in 0..GRAM_WIDTH {
-                for y in 0..SCREEN_H {
-                    for word_px_x in 0..8 {
-                        let screen_px_x = x * 8 + word_px_x;
-                        let screen_px_y = y;
-                        let word = self.gram[y * GRAM_WIDTH + x];
-                        if word & (0b10000000 >> word_px_x) != 0 {
-                            screen[screen_px_x + screen_px_y * SCREEN_W] = true;
-                        }
+            for addr in 0..(16*64) {
+                // Each word in GRAM is two bytes shown side by side
+                let mut word = self.gram[addr];
+
+                for word_px_x in 0..8 {
+                    let screen_px_x = (addr & 0x00F) * 8 + word_px_x;
+                    let mut screen_px_y = addr >> 5;
+                    if addr & 0x10 != 0 {
+                        screen_px_y += 32;
                     }
+
+                    if word & (0b10000000 >> word_px_x) != 0 {
+                        screen[screen_px_x + screen_px_y * SCREEN_W] = true;
+                    }
+                }
                 }
             }
         }
@@ -320,10 +343,10 @@ impl MgcLcd {
                     // Set GRAM address
                     self.curr_memory = Memory::GRam;
                     if !self.second_gram_addr {
-                        self.gram_address.1 = (data & 0b0111_1111) as usize;
+                        self.gram_address = ((data & 0b0111_1111) as u16) << 5;
                         self.second_gram_addr = true;
                     } else {
-                        self.gram_address.0 = (data & 0b0000_1111) as usize;
+                        self.gram_address |= ((data & 0b0000_1111) as u16) << 1;
                         self.second_gram_addr = false;
                     }
                     self.dummy_read_necessary = true;
@@ -380,13 +403,8 @@ impl MgcLcd {
                     },
 
                     Memory::GRam => {
-                        let address = self.gram_address.1 * GRAM_WIDTH + self.gram_address.0;
-                        self.gram[address] = data;
-
-                        self.gram_address.0 += 1;
-                        if self.gram_address.0 >= GRAM_WIDTH {
-                            self.gram_address.0 = 0;
-                        }
+                        self.gram[self.gram_address as usize] = data;
+                        self.gram_address += 1;
                     },
 
                     _ => unimplemented!("Writing other memories"),
