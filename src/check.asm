@@ -1,68 +1,67 @@
-#target ROM
-
-#include "z80mgc.asm"
-
-STACK_SIZE:     equ     32 ; in bytes
-
-#code ROM_CODE, 0x0000
-
-start:
-        jp      run_tests
-
-
-.org    0x0066
-nmi:
-        nop
-        nop
-        jp      run_tests
-
-run_tests:
-
-;;;;;;;;;;;;;;; Test LCD text
-
-
+#code CHECK_ROM
 
 ; Init
+check_start::
+reset:
+
+; Test LCD text
+
+        ld      SP, stack+STACK_SIZE    ; Set stack
+        call    lcd_wait                ; Init LCD
         ld      A, LCD_BI_SET_8_B
-        call    lcd_w_instr
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait                ; Clear LCD text
         ld      A, LCD_BI_CLR
-        call    lcd_w_instr
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait                ; Turn LCD on
         ld      A, LCD_BI_ON
-        call    lcd_w_instr
-; Write line 1
+        out     IO_LCD_W_INSTR, A
+
+        call    lcd_wait                ; Write line 1
         ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L1
-        call    lcd_w_instr
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
         ld      A, 'L'
-        call    lcd_w_mem
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
         ld      A, 'C'
-        call    lcd_w_mem
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
         ld      A, 'D'
-        call    lcd_w_mem
-; Write line 3
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait                ; Write line 3
         ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L3
-        call    lcd_w_instr
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
         ld      A, 'W'
-        call    lcd_w_mem
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
         ld      A, 'o'
-        call    lcd_w_mem
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
         ld      A, 'r'
-        call    lcd_w_mem
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
         ld      A, 'k'
-        call    lcd_w_mem
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
         ld      A, 's'
-        call    lcd_w_mem
+        out     IO_LCD_W_MEM, A
 
-;;;;;;;;;;;;;;; Test RAM and LCD text
+; Test RAM and LCD text
 
 ; Init
+        call    lcd_wait                ; Init LCD
         ld      A, LCD_BI_SET_8_B
-        call    lcd_w_instr
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait                ; Clear LCD text
         ld      A, LCD_BI_CLR
-        call    lcd_w_instr
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait                ; Turn LCD on
         ld      A, LCD_BI_ON
-        call    lcd_w_instr
-; Write to RAM, read and write it to LCD
-        ld      A, 'R'
+        out     IO_LCD_W_INSTR, A
+
+        ld      A, 'R'                  ; Write to RAM, read and write it to LCD
         ld      (ram_test), A
         ld      A, 'A'
         ld      (ram_test+1), A
@@ -75,33 +74,39 @@ run_tests:
         ld      A, 'K'
         ld      (ram_test+5), A
 
+        call    lcd_wait
         ld      A, LCD_BI_DD_ADDR | LCD_DD_ADDR_L1
-        call    lcd_w_instr
+        out     IO_LCD_W_INSTR, A
 
+        call    lcd_wait
         ld      A, (ram_test)
-        call    lcd_w_mem
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
         ld      A, (ram_test+1)
-        call    lcd_w_mem
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
         ld      A, (ram_test+2)
-        call    lcd_w_mem
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
         ld      A, (ram_test+3)
-        call    lcd_w_mem
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
         ld      A, (ram_test+4)
-        call    lcd_w_mem
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait
         ld      A, (ram_test+5)
-        call    lcd_w_mem
+        out     IO_LCD_W_MEM, A
 
+; Test LCD graphics
 
-;;;;;;;;;;;;;;; Test LCD graphics
-
-; Init graphics
-
+        call    lcd_wait                    ; Init graphics
         ld      A, LCD_EI_SET_8_E_G         ; Twice because first only sets extended mode
-        call    lcd_w_instr
+        out     IO_LCD_W_INSTR, A
+        call    lcd_wait
         ld      A, LCD_EI_SET_8_E_G
-        call    lcd_w_instr
+        out     IO_LCD_W_INSTR, A
 
-; Clear graphics
+                                            ; Clear graphics
 
         ld      E, 63                       ; Y
 clear_loop_ver:
@@ -122,7 +127,7 @@ clear_loop_hor:
         dec     E                           ; Decrement Y and jump if still positive
         jp      P, clear_loop_ver
 
-; Write graphics
+                                            ; Write graphics
 
         ld      D, LCD_EI_GD_ADDR | 1       ; X
         ld      E, LCD_EI_GD_ADDR | (10+8)  ; Y
@@ -147,49 +152,11 @@ write_sprite_loop_end:
         ld      A, LCD_EI_SET_8_B_G
         out     IO_LCD_W_INSTR, A
 
+; Keep looping
+
+loop:
         halt
-
-; ; Test scroll
-;         ld      A, LCD_EI_SET_8_E_G
-;         out     IO_LCD_W_INSTR, A
-;
-;         ld      A, LCD_EI_VSCR
-;         out     IO_LCD_W_INSTR, A
-;
-;         ld      A, LCD_EI_VSCR_A | 0x04     ; Scroll half a line
-;         out     IO_LCD_W_INSTR, A
-
-
-
-; - A: Instruction
-
-; - C: Trash
-lcd_w_instr:
-        ld      C, IO_LCD_R_INSTR
-_lcd_w_instr_check_busy:
-        in      (C)                         ; Undocumented instruction. Only sets flags
-        jp      M, _lcd_w_instr_check_busy
-        out     IO_LCD_W_INSTR, A
-        ret
-
-
-; - A: Trash
-lcd_wait:
-        in      A, IO_LCD_R_INSTR
-        bit     7, A
-        jr      NZ, lcd_wait
-        ret
-
-; - A: Data
-
-; - C: Trash
-lcd_w_mem:
-        ld      C, IO_LCD_R_INSTR
-_lcd_w_mem_check_busy:
-        in      (C)                         ; Undocumented instruction. Only sets flags
-        jp      M, _lcd_w_mem_check_busy
-        out     IO_LCD_W_MEM, A
-        ret
+        jr      loop
 
 
                 db      0b01100110
@@ -202,7 +169,6 @@ _lcd_w_mem_check_busy:
 sprite:         db      0b01111110
 
 
-#data RAM_DATA, 0x8000
+#data CHECK_RAM, MAIN_RAM_end
 
 ram_test:       data    8
-stack:          data    STACK_SIZE
