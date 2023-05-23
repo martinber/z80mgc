@@ -19,7 +19,8 @@ boot:
         ld      A, 0                    ; Set debug to 0
         ld      (debug), A
         ; jp      snake_start
-        jp      bricks_start
+        ; jp      bricks_start
+        jp      check_start
 
 #code MAIN_NMI, 0x066
 
@@ -73,6 +74,10 @@ timer_0:        data    1
 timer_1:        data    1
 
 #include "z80mgc.asm"
+
+#local
+#include "check.asm"
+#endlocal
 
 #local
 #include "snake.asm"

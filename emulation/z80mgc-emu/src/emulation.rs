@@ -38,7 +38,7 @@ impl Machine for MgcMachine {
     }
 
     fn port_in(&mut self, address: u16) -> u8 {
-        if (address & 0b0000_0000_1110_0000) == 0b0000_0000_0000_0000
+        if (address & 0b0000_0000_1110_0000) == 0b0000_0000_1000_0000
         {
             let mut out: u8 = 0b00000000;
             if self.clicked_up {
@@ -55,7 +55,7 @@ impl Machine for MgcMachine {
             }
             return out;
         }
-        else if (address & 0b0000_0000_1110_0000) == 0b0000_0000_1000_0000 {
+        else if (address & 0b0000_0000_1110_0000) == 0b0000_0000_0000_0000 {
             return self.lcd.run(
                 address & 0b0001 != 0,
                 address & 0b0010 != 0,
@@ -67,7 +67,7 @@ impl Machine for MgcMachine {
     }
 
     fn port_out(&mut self, address: u16, value: u8) {
-        if (address & 0b0000_0000_1110_0000) == 0b0000_0000_1000_0000 {
+        if (address & 0b0000_0000_1110_0000) == 0b0000_0000_0000_0000 {
             self.lcd.run(
                 address & 0b0001 != 0,
                 address & 0b0010 != 0,

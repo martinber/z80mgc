@@ -4,11 +4,13 @@
 ; - (b7,b6,b5) selects the device.
 ; - b1 goes to LCD RW (low for write, high for read)
 ; - b0 goes to LCD DI (low for instruction, high for memory)
-IO_BUT_R:           equ     0x00;
-IO_LCD_W_INSTR:     equ     0b10000000
-IO_LCD_R_INSTR:     equ     0b10000010
-IO_LCD_W_MEM:       equ     0b10000001
-IO_LCD_R_MEM:       equ     0b10000011
+IO_BUT_R:           equ     0b10000000
+IO_A:               equ     0b01000000
+IO_B:               equ     0b11000000
+IO_LCD_W_INSTR:     equ     0b00000000
+IO_LCD_R_INSTR:     equ     0b00000010
+IO_LCD_W_MEM:       equ     0b00000001
+IO_LCD_R_MEM:       equ     0b00000011
 
 ; LCD basic instructions
 LCD_BI_CLR:         equ     0b00000001  ; Clear

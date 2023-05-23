@@ -31,12 +31,12 @@
 #define WRITE_EN 13
 
 //#define EEPROM_SIZE 8192
-#define EEPROM_SIZE 1024
+#define EEPROM_SIZE 4098
 
 
 // Change name of program to write:
 
-INCBIN(Bin, "/home/mbernardi/documents/repos/other/z80mgc/out/snake.bin");
+INCBIN(Bin, "/home/mbernardi/documents/repos/other/z80mgc/out/main.bin");
 
 // This will create global these variables:
 //  const unsigned char gBinData[];              // Pointer to the data
