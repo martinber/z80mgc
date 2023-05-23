@@ -28,7 +28,7 @@ reset:
         call    lcd_clr_graphics        ; Clear graphics
 
         ld      BC, 128                 ; Copy 128 bytes of level data to (tiles)
-        ld      HL, lvl_3
+        ld      HL, lvl_1
         ld      DE, tiles
         ldir
 
@@ -323,25 +323,30 @@ _brick_collide_bound:
 
 
 move_pad:
-        in      A, IO_BUT_R                 ; Load button states in B
-        ld      B, A
-        bit     BUTTON_L, B                 ; Move if button was pressed
+        ld      HL, pad_x                   ; Load pad_x address in HL and pad_x in B
+        ld      B, (HL)
+        in      A, IO_BUT_R                 ; Load button states in A
+        bit     BUTTON_L, A                 ; Move if button was pressed
         jr      NZ, _move_pad_left
-        bit     BUTTON_R, B
+        bit     BUTTON_R, A
         jr      NZ, _move_pad_right
         ret
 
 _move_pad_right:
-        ld      HL, pad_x                   ; Move pad by 1
-        inc     (HL)
+        ld      A, (pad_w);                 ; Calculate -max_pad_x = -(FIELD_W - pad_x)
+        sub     FIELD_W
+        add     2
+        add     B                           ; Add pad_x and I can move only if result is positive
+        ret     P
+        inc     (HL)                        ; Move pad and return
         ret
 
 _move_pad_left:
-        ld      HL, pad_x                   ; Move pad by 1
-        dec     (HL)
+        ld      A, 0                        ; Check if pad_x is bigger than zero
+        cp      B
+        ret     P
+        dec     (HL)                        ; Move pad and return
         ret
-
-
 
 
 ; Args:
