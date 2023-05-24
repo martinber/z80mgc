@@ -195,7 +195,6 @@ impl MgcLcd {
                         screen[screen_px_x + screen_px_y * SCREEN_W] = true;
                     }
                 }
-                }
             }
         }
     }

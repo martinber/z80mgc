@@ -108,7 +108,7 @@ reset:
 
                                             ; Clear graphics
 
-        ld      E, 63                       ; Y
+        ld      E, 31                       ; Y
 clear_loop_ver:
         ld      B, 16                       ; Counter for X
         call    lcd_wait
@@ -119,8 +119,11 @@ clear_loop_ver:
         ld      A, LCD_EI_GD_ADDR | 0       ; Set X to zero
         out     IO_LCD_W_INSTR, A
 clear_loop_hor:
-        call    lcd_wait
-        ld      A, 0                        ; Data
+        call    lcd_wait                    ; Write 0 two times
+        ld      A, 0
+        out     IO_LCD_W_MEM, A
+        call    lcd_wait                    ; Write 0 two times
+        ld      A, 0
         out     IO_LCD_W_MEM, A
         djnz    clear_loop_hor              ; Decrement B and jump if not zero
 
@@ -167,7 +170,6 @@ loop:
                 db      0b00000000
                 db      0b10000001
 sprite:         db      0b01111110
-
 
 #data CHECK_RAM, MAIN_RAM_end
 
