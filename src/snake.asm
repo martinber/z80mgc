@@ -37,8 +37,8 @@ reset:
         call    lcd_wait                ; Turn on graphics
         ld      A, LCD_EI_SET_8_E_G
         out     IO_LCD_W_INSTR, A
-        call    lcd_clr_graphics        ; Clear graphics
 
+        call    clr_framebuffer
         call    field_clear
 ; Init snake as two horizontal tiles
         ld      A, 0                    ; Set head and tail positions to 0

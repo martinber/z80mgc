@@ -86,6 +86,23 @@ _lcd_clr_graphics_h:
         ret
 
 
+; Args:
+; - None
+; Ret:
+; - None
+; Affects:
+; - B
+; - DE
+; - HL
+clr_framebuffer:
+        ld      BC, FBUF_SIZE           ; Amount of bytes to copy
+        ld      HL, 0x8000              ; First byte of framebuffer
+        ld      DE, 0x8001              ; Second byte of framebuffer
+        ld      (HL), 0                 ; Clear fist byte of framebuffer
+        ldir                            ; Copy from HL to DE, incrementing and stopping when BC
+                                        ; reaches zeoo
+
+
 #data MAIN_RAM, 0x8000
 
 debug:          data    1               ; Flag that will be read by the emulator in address 0x8000
