@@ -98,7 +98,7 @@ _input_end:
         jr      Z, _move_tail           ; Just move the tail normally
         cp      TILE_FOOD               ; If tile wasnt food, it was a part of the snake, then reset
         jp      NZ, reset
-        call    put_food             ; If it was food, put food
+        call    put_food                ; If it was food, put food
         jr      _move_tail_end          ; Also dont move the tail, so the snake grows
 _move_tail:
 ; Move tail
@@ -109,6 +109,8 @@ _move_tail:
         call    move_bc_rel
         ld      (sn_tail_xy), BC
 _move_tail_end:
+
+        call    disp_fbuf
         jr      main_loop
 
 
@@ -190,15 +192,17 @@ put_food:
 ; - tmp_a
 ; Will calculate A <- (field + x + y * FIELD_W)
 set_tile:
-        push    AF                      ; Store arguments
         push    BC
+        push    AF                      ; Store arguments
 
-        ld      DE, BC                  ; Will hold GRAM coordinates
-        sla     D                       ; Multiply Y by 8 because it should be in px
-        sla     D
-        sla     D
-        set     7, D                    ; Equivalent to do OR with LCD_EI_GD_ADDR
-        set     7, E                    ; Equivalent to do OR with LCD_EI_GD_ADDR
+        ld      E, C                    ; Load framebuffer address where to draw in DE
+        ld      A, B
+        sla     A                       ; Multiply Y by 8 because it should be in px
+        sla     A
+        sla     A
+        call    calc_fbuf_addr
+
+        pop     AF
 
         ld      HL, sprite_0            ; Set sprite address to start of sprites data
         ld      B, 0                    ; Load sprite number in BC
@@ -208,11 +212,10 @@ set_tile:
         sla     C
         add     HL, BC                  ; Add offset of sprite
 
-        ld      B, 8                    ; Set sprite height
-        call    lcd_disp_sprite
+        ld      C, 8                    ; Set sprite height
+        call    copy_sprite
 
         pop     BC                      ; Restore arguments
-        pop     AF
 
 _set_tile_ram:
         ld      HL, field               ; Set HL to start of field
@@ -429,17 +432,110 @@ _lcd_disp_sprite_loop:
         ret
 
 
+; Args:
+; - A: Y position of top of sprite in px from top of LCD
+; - E: X position in tiles of 8px
+; Ret:
+; - DE: Framebuffer address where sprite should be copied
+; Affects:
+calc_fbuf_addr:
+        ld      D, 0                        ; DE will point to framebuffer memory which is
+                                            ; (fbuf+X*64+Y)
+
+        sla     E                           ; Shift left DE 6 times to multiply X by 64
+        sla     E                           ; Since X is at most 15, the first 4 shifts will never
+        sla     E                           ; overflow, but the remaining 2 will use the carry to
+        sla     E                           ; reach the high byte
+        sla     E
+        rl      D
+        sla     E
+        rl      D
+
+        add     A, E                        ; Add Y to X*64 which is on DE
+        ld      E, A                        ; See https://plutiedev.com/z80-add-8bit-to-16bit
+        adc     A, D
+        sub     E
+        ld      D, A
+
+        set     7, D                        ; Framebuffer is always at 0x8001, instead of adding
+        inc     DE                          ; 0x8001 to DE I set bit 7 of D and add 1
+        ret
+
+; Args:
+; - C: Sprite height
+; - DE: Framebuffer address where sprite should be copied
+; - HL: Address of start of sprite data
+; Affects:
+; - BC
+; - DE
+; - HL
+; Draws into the framebuffer
+copy_sprite:
+        ld      B, 0                        ; Because BC will be the counter of bytes to copy
+        ldir                                ; Copy (DE) <- (HL) until BC=0
+        ret
+
+disp_fbuf:
+
+        ld      HL, fbuf                    ; Set HL to start of fbuf
+        ld      DE, 64                      ; Offset between bytes of the same line
+
+        ld      IX, tmp_a                   ; Store current Y address
+        ld      (IX), 0
+
+_disp_fbuf_2_lines:
+        call    lcd_wait
+        ld      A, (IX)                     ; Write Y address and increment
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        inc     (IX)
+        call    lcd_wait
+        ld      A, LCD_EI_GD_ADDR           ; Write X address = 0
+        out     IO_LCD_W_INSTR, A
+
+        ld      B, 16
+_disp_fbuf_loop_even:
+        call    lcd_wait                    ; Write 16 bytes until B=0
+        ld      A, (HL)
+        out     IO_LCD_W_MEM, A
+        add     HL, DE                      ; Increment HL by 64 because of fbuf layout
+        djnz    _disp_fbuf_loop_even
+
+        ld      BC, -64*16+32               ; Move 32 lines down and continue with the odd line
+        add     HL, BC
+
+        ld      B, 16
+_disp_fbuf_loop_odd:
+        call    lcd_wait                    ; Write 16 bytes until B=0
+        ld      A, (HL)
+        ; ld      A, (timer_0)
+        out     IO_LCD_W_MEM, A
+        add     HL, DE                      ; Increment HL by 64 because of fbuf layout
+        djnz    _disp_fbuf_loop_odd
+
+        ld      BC, -64*16-31               ; Move 32 lines down and continue with the odd line
+        add     HL, BC
+
+        bit     5, (IX)                     ; Check if we reached line 32
+        jr      Z, _disp_fbuf_2_lines
+
+        ret
+
+
+
+
+
 ; Bitmaps in ROM
 
-; Sprite 0 is always empty. The tag points to the address of the last line
-                db      0b00000000
-                db      0b00000000
-                db      0b00000000
-                db      0b00000000
-                db      0b00000000
-                db      0b00000000
-                db      0b00000000
+; Sprite 0 is always empty
 sprite_0:       db      0b00000000
+                db      0b00000000
+                db      0b00000000
+                db      0b00000000
+                db      0b00000000
+                db      0b00000000
+                db      0b00000000
+                db      0b00000000
 
 ; TILE_SN_U
                 db      0b01111110

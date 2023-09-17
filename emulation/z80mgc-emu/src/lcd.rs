@@ -404,6 +404,12 @@ impl MgcLcd {
                     Memory::GRam => {
                         self.gram[self.gram_address as usize] = data;
                         self.gram_address += 1;
+
+                        // If address reaches end of pair of lines, it doesn't descend but instead
+                        // apparently goes to the start of the line
+                        if self.gram_address % 32 == 0 {
+                            self.gram_address -= 32;
+                        }
                     },
 
                     _ => unimplemented!("Writing other memories"),

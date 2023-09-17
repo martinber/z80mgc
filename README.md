@@ -6,7 +6,7 @@ z80 minimal game console
 Specs:
 
 - CPU: Z80 CMOS at ???? MHz
-- ROM: 16384 bytes (2 x 28C64 EEPROM)
+- ROM: 16384 bytes (2 x 28C65 EEPROM)
 - RAM: 32768 bytes (1 x 71256 RAM)
 - Screen: 128x64 px LCD for text and graphics (ST7920 driver)
 - Input: 8 buttons, read by polling
