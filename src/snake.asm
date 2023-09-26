@@ -21,6 +21,7 @@ reset:
         ld      SP, stack+STACK_SIZE    ; Set stack
         ld      A, 255
         ld      (prng_seed), A          ; This will be updated each time the prng is run
+        ld      (sn_ready), A           ; Input will be read
 
         call    lcd_wait                ; Init LCD
         ld      A, LCD_BI_SET_8_B
@@ -65,27 +66,48 @@ reset:
 
 main_loop:
 read_input:
-; Read input and set direction
+; Read input and set direction, this happens in every NMI
+        ld      A, (sn_ready)           ; If snake was rotated this frame, wait
+        cp      0
+        jr      Z, _wait
+
         in      A, IO_BUT_R             ; Load button states in B
         ld      B, A
         bit     BUTTON_U, B             ; Test if button was pressed
         call    NZ, button_up           ; Change dir if button is pressed
+        jr      NZ, _input_handled      ; Jump if the button was handled
+        in      A, IO_BUT_R
+        ld      B, A
         bit     BUTTON_D, B
         call    NZ, button_down
+        jr      NZ, _input_handled
+        in      A, IO_BUT_R
+        ld      B, A
         bit     BUTTON_L, B
         call    NZ, button_left
+        jr      NZ, _input_handled
+        in      A, IO_BUT_R
+        ld      B, A
         bit     BUTTON_R, B
         call    NZ, button_right
+        jr      NZ, _input_handled
+        jr      _wait
+
+_input_handled:
+        ld      A, 0
+        ld      (sn_ready), A
 
 _wait:
         halt
-        ld      HL, timer_1
-        ld      A, 20
+        ld      HL, timer_1             ; Read timer and continue to _frame if > 20
+        ld      A, 40
         cp      (HL)
         jp      P, read_input
         ld      (HL), 0
+        ld      A, 0xFF                 ; Snake can be moved with input again
+        ld      (sn_ready), A
 
-_input_end:
+_frame:
 ; Move head
         ld      BC, (sn_head_xy)        ; Get head direction in A
         call    get_tile
@@ -111,12 +133,14 @@ _move_tail:
 _move_tail_end:
 
         call    disp_fbuf
-        jr      main_loop
+        jp      main_loop
 
 
 ; Start moving in a certain direction
 ; Args:
 ; - A: Direction to move, e.g. TILE_SN_D
+; Returns:
+; - Flag is Z if button was not pressed, NZ if button was pressed
 ; Affects:
 ; - A
 ; - BC
@@ -124,38 +148,61 @@ _move_tail_end:
 button_up:
         ld      BC, (sn_head_xy)        ; Load head position
         call    get_tile                ; Load tile in head
-        cp      TILE_SN_D               ; If we were going down, return
-        ret     Z
+        cp      TILE_SN_D               ; If we were going down or up, ignore
+        jr      Z, _button_ignored
+        cp      TILE_SN_U
+        jr      Z, _button_ignored
         ld      A, TILE_SN_U
         ld      BC, (sn_head_xy)        ; Load head position
         call    set_tile                ; Set new head tile, indicates direction
+        or      0xFF                    ; Set NZ
         ret
+
 button_down:
+        ; ld      A, 1                    ; Set debug to 1
+        ; ld      (debug), A
         ld      BC, (sn_head_xy)
         call    get_tile
         cp      TILE_SN_U
-        ret     Z
+        jr      Z, _button_ignored
+        cp      TILE_SN_D
+        jr      Z, _button_ignored
         ld      A, TILE_SN_D
         ld      BC, (sn_head_xy)
         call    set_tile
+        ; ld      A, 0                    ; Set debug to 0
+        ; ld      (debug), A
+        or      0xFF
         ret
+
 button_left:
         ld      BC, (sn_head_xy)
         call    get_tile
         cp      TILE_SN_R
-        ret     Z
+        jr      Z, _button_ignored
+        cp      TILE_SN_L
+        jr      Z, _button_ignored
         ld      A, TILE_SN_L
         ld      BC, (sn_head_xy)
         call    set_tile
+        or      0xFF
         ret
+
 button_right:
         ld      BC, (sn_head_xy)
         call    get_tile
         cp      TILE_SN_L
-        ret     Z
+        jr      Z, _button_ignored
+        cp      TILE_SN_R
+        jr      Z, _button_ignored
         ld      A, TILE_SN_R
         ld      BC, (sn_head_xy)
         call    set_tile
+        or      0xFF
+        ret
+
+_button_ignored:                    ; The button was ignored due to being invalid
+        and     0                   ; Set Z
         ret
 
 
@@ -508,7 +555,6 @@ _disp_fbuf_loop_even:
 _disp_fbuf_loop_odd:
         call    lcd_wait                    ; Write 16 bytes until B=0
         ld      A, (HL)
-        ; ld      A, (timer_0)
         out     IO_LCD_W_MEM, A
         add     HL, DE                      ; Increment HL by 64 because of fbuf layout
         djnz    _disp_fbuf_loop_odd
@@ -592,6 +638,7 @@ sn_head_y:      data    1
 sn_tail_xy:
 sn_tail_x:      data    1
 sn_tail_y:      data    1
+sn_ready:       data    1               ; Input will be read if not zero, used to limit rotations
 prng_seed:      data    1               ; Has to be set non-zero on startup
 tmp_a:          data    1
 tmp_b:          data    1

@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 # iz80 = { git = "https://github.com/martinber/iz80" }
-iz80 = "0.3.6"
+iz80 = "0.3.8"
 rand = "0.8.5"
 gtk = "0.17"
 gdk = "0.17"
