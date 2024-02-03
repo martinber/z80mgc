@@ -39,8 +39,8 @@ boot:
         ld      SP, stack+STACK_SIZE    ; Set stack
         ld      A, 0                    ; Set debug to 0
         ld      (debug), A
-        jp      snake_start
-        ; jp      bricks_start
+        ; jp      snake_start
+        jp      bricks_start
         ; jp      check_start
 
 #code MAIN_NMI, 0x066
