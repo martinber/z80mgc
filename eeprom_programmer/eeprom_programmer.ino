@@ -22,6 +22,16 @@
 
 
 #include "incbin.h"
+#include <CRC32.h>
+
+#define EEPROM_SIZE 8192
+
+INCBIN(Bin, "/home/mbernardi/documents/repos/other/z80mgc/out/main.bin");
+// INCBIN(Bin, "/home/mbernardi/desktop/zero");
+// INCBIN will create these global variables:
+//  const unsigned char gBinData[];              // Pointer to the data
+//  const unsigned char *const gBinEnd;          // Pointer to the end of the data
+//  const unsigned int gBinSize;                 // Size of the data in bytes
 
 #define OUTPUT_EN A0
 #define WRITE_EN 10
@@ -61,17 +71,8 @@ const int ADDR_ORDER[] = { // Order in which address bits should enter the shift
   1 << 4,  // QA -> A4
 };
 
-//#define EEPROM_SIZE 8192
-#define EEPROM_SIZE 4096
-
-// Change name of program to write:
-
-INCBIN(Bin, "/home/mbernardi/documents/repos/other/z80mgc/out/main.bin");
-
-// This will create global these variables:
-//  const unsigned char gBinData[];              // Pointer to the data
-//  const unsigned char *const gBinEnd;          // Pointer to the end of the data
-//  const unsigned int gBinSize;                 // Size of the data in bytes
+CRC32 WRITE_CRC;
+CRC32 READ_CRC;
 
 /*
  * Output the address bits and outputEnable signal using shift registers.
@@ -134,10 +135,13 @@ void writeEEPROM(int address, byte data) {
  * Read the contents of the EEPROM and print them to the serial monitor.
  */
 void printContents() {
-  for (int base = 0; base <= EEPROM_SIZE; base += 16) {
+  for (int base = 0; base < EEPROM_SIZE; base += 16) {
     byte data[16];
     for (int offset = 0; offset <= 15; offset += 1) {
       data[offset] = readEEPROM(base + offset);
+      if (base + offset < gBinSize) {
+        READ_CRC.update(data[offset]);
+      }
     }
 
     char buf[80];
@@ -167,7 +171,7 @@ void setup() {
   // Erase entire EEPROM
   Serial.print("Erasing EEPROM");
   for (int address = 0; address < EEPROM_SIZE; address += 1) {
-    writeEEPROM(address, 0xff);
+    writeEEPROM(address, 0x00);
 
     if (address % 64 == 0) {
       Serial.print(".");
@@ -180,18 +184,23 @@ void setup() {
   Serial.print("Programming EEPROM");
   PGM_P pgm_data = reinterpret_cast<PGM_P>(gBinData);
   for (int address = 0; address < gBinSize; address += 1) {
-    writeEEPROM(address, pgm_read_byte(pgm_data++));
+    byte data = pgm_read_byte(pgm_data++);
+    WRITE_CRC.update(data);
+    writeEEPROM(address, data);
 
     if (address % 64 == 0) {
       Serial.print(".");
     }
   }
-  Serial.println(" done");
-
-
+  
   // Read and print out the contents of the EERPROM
   Serial.println("Reading EEPROM");
   printContents();
+
+  Serial.println("CRC32 of data written:");
+  Serial.println(WRITE_CRC.finalize());
+  Serial.println("CRC32 of data read back:");
+  Serial.println(READ_CRC.finalize());
 }
 
 

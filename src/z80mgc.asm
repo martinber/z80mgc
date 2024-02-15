@@ -75,6 +75,7 @@ BUTTON_U:       equ     0 ; 0b00000001, Up
 BUTTON_D:       equ     1 ; 0b00000010, Down
 BUTTON_L:       equ     2 ; 0b00000100, Left
 BUTTON_R:       equ     3 ; 0b00001000, Right
+; TODO: Invert, because buttons have pull-up resistor and become 0 when pressed
 
 #code Z80MGC_ROM
 
