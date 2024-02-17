@@ -39,7 +39,10 @@ boot:
         ld      SP, stack+STACK_SIZE    ; Set stack
         ld      A, 0                    ; Set debug to 0
         ld      (debug), A
-        jp      snake_start
+
+        call    welcome_start
+
+        ; jp      snake_start
         ; jp      bricks_start
         ; jp      check_start
 
@@ -86,6 +89,21 @@ _lcd_clr_graphics_h:
         ret
 
 
+; Print a string until a null char
+; Args:
+; - HL: Address of first char
+; Affects:
+; - A
+print:
+        call    lcd_wait
+        ld      A, (HL)
+        cp      0
+        ret     Z
+        out     IO_LCD_W_MEM, A
+        inc     HL
+        jr      print
+
+
 ; Args:
 ; - None
 ; Ret:
@@ -116,7 +134,7 @@ timer_1:        data    1
 #include "z80mgc.asm"
 
 #local
-#include "check.asm"
+#include "welcome.asm"
 #endlocal
 
 #local
