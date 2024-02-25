@@ -74,23 +74,23 @@ read_input:
         in      A, IO_BUT_R             ; Load button states in B
         ld      B, A
         bit     BUTTON_U, B             ; Test if button was pressed
-        call    NZ, button_up           ; Change dir if button is pressed
-        jr      NZ, _input_handled      ; Jump if the button was handled
+        call    Z, button_up           ; Change dir if button is pressed
+        jr      Z, _input_handled      ; Jump if the button was handled
         in      A, IO_BUT_R
         ld      B, A
         bit     BUTTON_D, B
-        call    NZ, button_down
-        jr      NZ, _input_handled
+        call    Z, button_down
+        jr      Z, _input_handled
         in      A, IO_BUT_R
         ld      B, A
         bit     BUTTON_L, B
-        call    NZ, button_left
-        jr      NZ, _input_handled
+        call    Z, button_left
+        jr      Z, _input_handled
         in      A, IO_BUT_R
         ld      B, A
         bit     BUTTON_R, B
-        call    NZ, button_right
-        jr      NZ, _input_handled
+        call    Z, button_right
+        jr      Z, _input_handled
         jr      _wait
 
 _input_handled:
@@ -140,7 +140,7 @@ _move_tail_end:
 ; Args:
 ; - A: Direction to move, e.g. TILE_SN_D
 ; Returns:
-; - Flag is Z if button was not pressed, NZ if button was pressed
+; - Flag is Z if button was pressed, NZ if button not was pressed
 ; Affects:
 ; - A
 ; - BC
@@ -155,12 +155,10 @@ button_up:
         ld      A, TILE_SN_U
         ld      BC, (sn_head_xy)        ; Load head position
         call    set_tile                ; Set new head tile, indicates direction
-        or      0xFF                    ; Set NZ
+        and     0x00                    ; Set Z
         ret
 
 button_down:
-        ; ld      A, 1                    ; Set debug to 1
-        ; ld      (debug), A
         ld      BC, (sn_head_xy)
         call    get_tile
         cp      TILE_SN_U
@@ -170,9 +168,7 @@ button_down:
         ld      A, TILE_SN_D
         ld      BC, (sn_head_xy)
         call    set_tile
-        ; ld      A, 0                    ; Set debug to 0
-        ; ld      (debug), A
-        or      0xFF
+        and     0x00
         ret
 
 button_left:
@@ -185,7 +181,7 @@ button_left:
         ld      A, TILE_SN_L
         ld      BC, (sn_head_xy)
         call    set_tile
-        or      0xFF
+        and     0x00
         ret
 
 button_right:
@@ -198,7 +194,7 @@ button_right:
         ld      A, TILE_SN_R
         ld      BC, (sn_head_xy)
         call    set_tile
-        or      0xFF
+        and     0x00
         ret
 
 _button_ignored:                    ; The button was ignored due to being invalid
