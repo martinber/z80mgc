@@ -128,6 +128,11 @@ stack:          data    STACK_SIZE
 timers:
 timer_0:        data    1
 timer_1:        data    1
+tmp_a:          data    1
+tmp_b:          data    1
+tmp_c:          data    1
+tmp_d:          data    1
+tmp_e:          data    1
 
 #include "z80mgc.asm"
 

@@ -93,3 +93,105 @@ lcd_wait:
         bit     7, A
         jr      NZ, lcd_wait
         ret
+
+
+; Args:
+; - C: Sprite height
+; - DE: Framebuffer address where sprite should be copied
+; - HL: Address of start of sprite data
+; Affects:
+; - BC
+; - DE
+; - HL
+; Draws into the framebuffer
+copy_sprite:
+        ld      B, 0                        ; Because BC will be the counter of bytes to copy
+        ldir                                ; Copy (DE) <- (HL) until BC=0
+        ret
+
+
+; Args:
+; - A: Y position of top of sprite in px from top of LCD
+; - E: X position in tiles of 8px
+; Ret:
+; - DE: Framebuffer address where sprite should be copied
+; Affects:
+; - A
+calc_fbuf_addr:
+        ld      D, 0                        ; DE will point to framebuffer memory which is
+                                            ; (fbuf+X*64+Y)
+
+        sla     E                           ; Shift left DE 6 times to multiply X by 64
+        sla     E                           ; Since X is at most 15, the first 4 shifts will never
+        sla     E                           ; overflow, but the remaining 2 will use the carry to
+        sla     E                           ; reach the high byte
+        sla     E
+        rl      D
+        sla     E
+        rl      D
+
+        add     A, E                        ; Add Y to X*64 which is on DE
+        ld      E, A                        ; See https://plutiedev.com/z80-add-8bit-to-16bit
+        adc     A, D
+        sub     E
+        ld      D, A
+
+        set     7, D                        ; Framebuffer is always at 0x8001, instead of adding
+        inc     DE                          ; 0x8001 to DE I set bit 7 of D and add 1
+        ret
+
+
+; Args:
+; - None
+; Affects:
+; - A
+; - BC
+; - DE
+; - HL
+; - IX
+; - tmp_a
+; Draws the entire framebuffer
+disp_fbuf:
+
+        ld      HL, fbuf                    ; Set HL to start of fbuf
+        ld      DE, 64                      ; Offset between bytes of the same line
+
+        ld      IX, tmp_a                   ; Store current Y address
+        ld      (IX), 0
+
+_disp_fbuf_2_lines:
+        call    lcd_wait
+        ld      A, (IX)                     ; Write Y address and increment
+        or      LCD_EI_GD_ADDR
+        out     IO_LCD_W_INSTR, A
+        inc     (IX)
+        call    lcd_wait
+        ld      A, LCD_EI_GD_ADDR           ; Write X address = 0
+        out     IO_LCD_W_INSTR, A
+
+        ld      B, 16
+_disp_fbuf_loop_even:
+        call    lcd_wait                    ; Write 16 bytes until B=0
+        ld      A, (HL)
+        out     IO_LCD_W_MEM, A
+        add     HL, DE                      ; Increment HL by 64 because of fbuf layout
+        djnz    _disp_fbuf_loop_even
+
+        ld      BC, -64*16+32               ; Move 32 lines down and continue with the odd line
+        add     HL, BC
+
+        ld      B, 16
+_disp_fbuf_loop_odd:
+        call    lcd_wait                    ; Write 16 bytes until B=0
+        ld      A, (HL)
+        out     IO_LCD_W_MEM, A
+        add     HL, DE                      ; Increment HL by 64 because of fbuf layout
+        djnz    _disp_fbuf_loop_odd
+
+        ld      BC, -64*16-31               ; Move 32 lines down and continue with the odd line
+        add     HL, BC
+
+        bit     5, (IX)                     ; Check if we reached line 32
+        jr      Z, _disp_fbuf_2_lines
+
+        ret

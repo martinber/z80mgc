@@ -49,6 +49,7 @@ reset:
 
 _loop:
         halt
+        jp      _loop
         ; ld      A, (timer_0)            ; Continue waiting if less than 2 ticks passed
         ; and     0b00000001
         ; jr      NZ, _loop
