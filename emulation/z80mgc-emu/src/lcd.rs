@@ -166,13 +166,18 @@ impl MgcLcd {
                     1 => self.ddram[ddram_addr] & 0x00FF,
                     _ => unreachable!(),
                 };
+                assert!(
+                    (ddram_byte as usize) < LCD_FONT.len(),
+                    "Tried to draw unexisting character",
+                );
+                let lcd_char = LCD_FONT[ddram_byte as usize];
 
                 for char_px_x in 0..CHAR_W {
                     for char_px_y in 0..CHAR_H {
                         let screen_px_x = x * CHAR_W + char_px_x;
                         let screen_px_y = y * CHAR_H + char_px_y;
                         screen[screen_px_x + screen_px_y * SCREEN_W]
-                            = LCD_FONT[ddram_byte as usize][char_px_y] & (0b10000000 >> char_px_x) != 0;
+                            = lcd_char[char_px_y] & (0b10000000 >> char_px_x) != 0;
                     }
                 }
             }

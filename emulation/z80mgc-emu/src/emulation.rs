@@ -14,6 +14,10 @@ pub struct MgcMachine {
     pub clicked_down: bool,
     pub clicked_left: bool,
     pub clicked_right: bool,
+    pub clicked_a: bool,
+    pub clicked_b: bool,
+    pub clicked_x: bool,
+    pub clicked_y: bool,
 }
 
 impl MgcMachine {
@@ -25,6 +29,10 @@ impl MgcMachine {
             clicked_down: false,
             clicked_left: false,
             clicked_right: false,
+            clicked_a: false,
+            clicked_b: false,
+            clicked_x: false,
+            clicked_y: false,
         }
     }
 }
@@ -40,18 +48,30 @@ impl Machine for MgcMachine {
     fn port_in(&mut self, address: u16) -> u8 {
         if (address & 0b0000_0000_1110_0000) == 0b0000_0000_1000_0000
         {
-            let mut out: u8 = 0b00000000;
+            let mut out: u8 = 0b11111111;
             if self.clicked_up {
-                out |= 0b00000001;
+                out &= 0b11111110;
             }
             if self.clicked_down {
-                out |= 0b00000010;
+                out &= 0b11111101;
             }
             if self.clicked_left {
-                out |= 0b00000100;
+                out &= 0b11111011;
             }
             if self.clicked_right {
-                out |= 0b00001000;
+                out &= 0b11110111;
+            }
+            if self.clicked_a {
+                out &= 0b11101111;
+            }
+            if self.clicked_b {
+                out &= 0b11011111;
+            }
+            if self.clicked_x {
+                out &= 0b10111111;
+            }
+            if self.clicked_y {
+                out &= 0b01111111;
             }
             return out;
         }

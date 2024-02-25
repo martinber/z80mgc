@@ -26,17 +26,40 @@ welcome_start::
         ld      A, 0                    ; Set first game as selected
         ld      (selected_game), A
 
+        ld      A, 0b11111111           ; Set previous input as no button pressed
+        ld      (prev_input), A
+
         jp      loop
 
 
 ; Keep looping
 
+; Needs C to be unmodified
 loop:
+
+        ld      A, (prev_input)         ; Load previous button states in B
+        ld      B, A
+        in      A, IO_BUT_R             ; Load new states in A and C
+        ld      C, A
+
+        xor     B                       ; (old XOR new) AND old will have 1 in new button presses
+        and     B
+        ld      B, A                    ; Save this result in B
+
+        ld      HL, selected_game       ; Store addr of selected_game in HL
+        bit     BUTTON_D, B             ; Handle change of selected game
+        call    NZ, next_game
+        bit     BUTTON_U, B
+        call    NZ, prev_game
+
+        ld      A, C                    ; Save button states for next frame
+        ld      (prev_input), A
 
         ld      HL, games_names         ; Set HL to games_names + selected_game * 16
         ld      B, 0
         ld      A, (selected_game)
         ld      C, A
+        sla     C
         sla     C
         sla     C
         sla     C
@@ -51,9 +74,35 @@ loop:
         halt
         jr      loop
 
+
+; Args:
+; - HL: address of variable selected_game
+; Ret:
+; Affects:
+; - A
+next_game:
+        inc     (HL)                    ; Increment selected game
+        ld      A, (HL)
+        cp      N_GAMES                 ; Return if selected_game != N_GAMES
+        ret     NZ
+        ld      (HL), N_GAMES-1         ; Otherwise set it to N_GAMES-1
+        ret
+
+
+; Args:
+; - HL: address of variable selected_game
+; Ret:
+; Affects:
+prev_game:
+        dec     (HL)
+        ret     P                       ; Return if flag S is not set (result is positive)
+        ld      (HL), 0
+        ret
+
+
 welcome_msg:    defb    "==== z80mgc ====",0
-games_names:    defb    " ",16," Snake        ",0    ; Required length: 15 chars + null. 16 is a >
-                defb    " ",16," Bricks       ",0
+games_names:    defb    " ",16," Snake       ",0    ; Required length: 15 chars + null. 16 is a >
+                defb    " ",16," Bricks      ",0
 
                 db      0b01100110
                 db      0b01100110
@@ -66,4 +115,5 @@ sprite:         db      0b01111110
 
 #data WELCOME_RAM, MAIN_RAM_end
 
-selected_game:  data    8
+prev_input:     data    1               ; Previous button states
+selected_game:  data    1

@@ -172,6 +172,10 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
                             65364 => s.machine.clicked_down = true,
                             65361 => s.machine.clicked_left = true,
                             65363 => s.machine.clicked_right = true,
+                            112 => s.machine.clicked_a = true, // Z key
+                            120 => s.machine.clicked_b = true, // C key
+                            97 => s.machine.clicked_x = true, // A key
+                            115 => s.machine.clicked_y = true, // S key
                             _ => {},
                         }
                         // println!("key value: {:?}", *event.keyval());
@@ -197,6 +201,10 @@ fn start(application: &gtk::Application, files: &[gio::File], _hint: &str) {
                             65364 => s.machine.clicked_down = false,
                             65361 => s.machine.clicked_left = false,
                             65363 => s.machine.clicked_right = false,
+                            112 => s.machine.clicked_a = false,
+                            120 => s.machine.clicked_b = false,
+                            97 => s.machine.clicked_x = false,
+                            115 => s.machine.clicked_y = false,
                             _ => {},
                         }
                     },
