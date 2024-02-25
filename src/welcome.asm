@@ -113,7 +113,12 @@ start_game:
         ld      C, A
         sla     C
         add     HL, BC
-        jp      (HL)
+
+        ld      A, (HL)                 ; Load (HL) into HL, can only be done by parts
+        inc     HL
+        ld      H, (HL)
+        ld      L, A
+        jp      (HL)                    ; Actual jump
 
 
 welcome_msg:    defb    "==== z80mgc ====",0
