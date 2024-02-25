@@ -41,10 +41,8 @@ boot:
         ld      (debug), A
 
         call    welcome_start
-
         ; jp      snake_start
         ; jp      bricks_start
-        ; jp      check_start
 
 #code MAIN_NMI, 0x066
 

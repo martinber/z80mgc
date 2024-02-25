@@ -51,6 +51,8 @@ loop:
         call    NZ, next_game
         bit     BUTTON_U, B
         call    NZ, prev_game
+        bit     BUTTON_A, B
+        call    NZ, start_game
 
         ld      A, C                    ; Save button states for next frame
         ld      (prev_input), A
@@ -100,18 +102,26 @@ prev_game:
         ret
 
 
+; Args:
+; Ret:
+; Affects:
+; - Jumps to game, so it affects everything
+start_game:
+        ld      HL, games_addrs         ; Set HL to games_addrs + selected_game * 2
+        ld      B, 0
+        ld      A, (selected_game)
+        ld      C, A
+        sla     C
+        add     HL, BC
+        jp      (HL)
+
+
 welcome_msg:    defb    "==== z80mgc ====",0
 games_names:    defb    " ",16," Snake       ",0    ; Required length: 15 chars + null. 16 is a >
                 defb    " ",16," Bricks      ",0
 
-                db      0b01100110
-                db      0b01100110
-                db      0b00000000
-                db      0b00001000
-                db      0b00001100
-                db      0b00000000
-                db      0b10000001
-sprite:         db      0b01111110
+games_addrs:    defw    snake_start
+                defw    bricks_start
 
 #data WELCOME_RAM, MAIN_RAM_end
 
