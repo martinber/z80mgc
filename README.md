@@ -70,16 +70,22 @@ poll if it is ready before using it:
   for 20ns after disabling (CPU does this for around half a clock cycle). When reading, data is
   valid 260ns after enabled (CPU waits for around 2 clock cycles)
 
-Speed:
+LCD speed:
 
-- The snake game was doing around 150 instructions per game loop. If I consider 4 clocks per
-  instruction, I think I can already run it at 60fps if the CPU clock is at 36kHz instead of 6MHz.
 - If I run CPU at 5MHz, with 15fps, assuming instructions of 20 clocks, I can do around 16000 CPU
   instructions/frame.
 - But the LCD is slower, it takes around 74µs per LCD instruction so if I run at 15fps, I can do
   around 900 LCD instructions per frame. Considering sprites of 8 tiles and that I have to give X
   and Y coordinates, it takes 24 instructions per sprite max I can draw a max of around 37 sprites
   per frame.
+- To display an entire framebuffer in the LCD: For each pair of lines, I need 18 LCD instructions (2
+  for X/Y coordinates and 16 for the data), and since there are 64 lines, then I need 576 LCD
+  instructions, which take around 43000µs which would be 23fps.
+- Anyway the LCD is not that fast. I should consider drawing the framebuffer in an interlaced way,
+  and if I need something better I should start somehow only drawing the updated parts of the
+  screen.
+- I don't want to spend too much time optimizing code for this LCD, I would prefer to spend the time
+  adding a composite video output.
 
 Game timimg
 -----------

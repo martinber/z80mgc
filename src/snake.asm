@@ -39,7 +39,7 @@ reset:
         ld      A, LCD_EI_SET_8_E_G
         out     IO_LCD_W_INSTR, A
 
-        call    clr_framebuffer
+        call    clr_fbuf
         call    field_clear
 ; Init snake as two horizontal tiles
         ld      A, 0                    ; Set head and tail positions to 0

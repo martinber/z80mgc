@@ -46,34 +46,22 @@ reset:
         ld      (pad_w), A              ; edges
 
         call    draw_bricks             ; Draw bricks
+        call    disp_fbuf
 
 _loop:
         halt
         jp      _loop
+
         ; ld      A, (timer_0)            ; Continue waiting if less than 2 ticks passed
         ; and     0b00000001
         ; jr      NZ, _loop
 
-        ld      HL, sprite_air
-        ld      C, 0
-        call    draw_ball               ; Clear ball
-
         call    move_ball_x             ; Move ball and collide with bricks and walls
         call    move_ball_y
 
-        ; ld      A, 1
-        ; ld      (debug), A
         call    pad_collide             ; Collide with pad
-        ; ld      A, 0
-        ; ld      (debug), A
 
         call    move_pad
-
-        call    draw_pad                ; Draw pad
-
-        ld      C, 1
-        call    draw_ball               ; Draw ball
-
 
         jr      _loop
 
@@ -85,55 +73,119 @@ _loop:
 ; Affects:
 ; - All
 draw_bricks:
-        ld      D, tiles/255                ; DE holds tile memory address. Table is 256-aligned, so
-        ld      E, 0                        ; D will be high byte of table start address and the low
-                                            ; will be the offset or actual position of the
-                                            ; brick/tile. To get the Y position I can use E/16 and
-                                            ; the remainder is the X position
+        ld      B, tiles/255                ; BC holds tile memory address. Table is 256-aligned, so
+        ld      C, 0                        ; B will be high byte of table start address and C will
+                                            ; be the offset or actual position of the brick/tile:
+                                            ; C = 0bYYYYXXXX
+                                            ; To get the Y position I can use C/16 and the remainder
+                                            ; is the X position
 
-        ld      A, 0 | LCD_EI_GD_ADDR       ; Holds Y coordinate in pixels of the bottom of the tile
-        ld      (_cur_y), A                 ; from the top of the screen, I put it in another
-                                            ; variable so I dont have to divide E by 16 and to do
-                                            ; the OR with LCD_EI_GD_ADDR every time
+_draw_bricks_loop_col:
+        ld      A, 0                        ; Calculate fbuf address for Y=0 and X=C (C will always
+        ld      E, C                        ; have higher bytes corresponding to Y equal to 0)
+        call    calc_fbuf_addr              ; Now DE holds address of fbuf. TODO: I think I can
+                                            ; optimize this so I don't call calc_fbuf_addr
+
 _draw_bricks_loop:
-        ld      H, sprite_null/256          ; Get sprite table start (it starts at Y=3 of the
-                                            ; sprite, and its 256-aligned)
 
-        ld      A, (DE)                     ; Get tile to draw
+        ld      A, (BC)                     ; Get tile to draw
+        push    BC                          ; And save tile address in stack for later
 
+        cp      A, TILE_AIR                 ; If the tile has nothing, increment fbuf address by 4
+        jr      NZ, _draw_bricks_loop_draw  ; and skip drawing
+        inc     DE
+        inc     DE
+        inc     DE
+        inc     DE
+        jr      _draw_bricks_loop_skip
+
+_draw_bricks_loop_draw:
+        ld      H, sprite_air/256           ; Get sprite table start. It is 256-aligned
         sla     A                           ; Multiply the ID by 4 to get the offset of address of
         sla     A                           ; sprite.
         ld      L, A                        ; So now we have address of sprite in HL
 
-        ld      C, IO_LCD_W_MEM             ; IO device
-        ld      B, 4                        ; Sprite height
-_draw_bricks_line_loop:
-        call    lcd_wait
-        ld      A, (_cur_y)                 ; Set Y address, already in OR with flag
-        add     B
-        dec     A                           ; I dont know why I have to do this
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, E                        ; Set X address, I have to modulo by 16 and OR with flag
-        and     A, 0b00001111
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        outd                                ; Send to IO dev C, contents of (HL), decrement HL and B
-        jr      NZ, _draw_bricks_line_loop
-; End of loop
-        inc     E                           ; Increment address
+        ld      C, 4                        ; Copy sprite, height is 4px
+        call    copy_sprite
 
-        ld      A, 0b00001111               ; See if E is multiple of 16 meaning we went down a line
-        and     E
-        jr      NZ, _draw_bricks_loop       ; Loop if we didnt reach end of line
-        ld      A, (_cur_y)                 ; Add 5 to (_cur_y)
-        add     A, 5
-        ld      (_cur_y), A
-        ld      A, 128                      ; See if E reached 128, meaning we alreade drew 8 lines
-        cp      E
-        jr      NZ, _draw_bricks_loop
+_draw_bricks_loop_skip:
+        inc     DE                          ; Increment fbuf address by one, because bricks are
+                                            ; padded 1px each other
+
+        pop     BC                          ; Retrieve tile memory address
+        ld      HL, 16                      ; Add 16 to descend a line
+        add     HL, BC
+        ld      BC, HL
+
+        bit     7, C                        ; Check if we reached C=128 which happens when we reach
+                                            ; line 8
+        jr      Z, _draw_bricks_loop        ; If we didn't go over last line, loop normally
+
+        ld      A, C                        ; Otherwise, go to start of next column
+        inc     A                           ; Move horizontally to the right in tile table
+        and     0b00001111                  ; Set Y position in the tile table to 0
+        ld      C, A
+
+        jr      NZ, _draw_bricks_loop_col   ; If we didn't go over last column, loop new column
         ret
+
+
+; ; Args:
+; ; - Nothing
+; ; Ret:
+; ; - Nothing
+; ; Affects:
+; ; - All
+; draw_bricks:
+;         ld      D, tiles/255                ; DE holds tile memory address. Table is 256-aligned, so
+;         ld      E, 0                        ; D will be high byte of table start address and the low
+;                                             ; will be the offset or actual position of the
+;                                             ; brick/tile. To get the Y position I can use E/16 and
+;                                             ; the remainder is the X position
+;
+;         ld      A, 0 | LCD_EI_GD_ADDR       ; Holds Y coordinate in pixels of the bottom of the tile
+;         ld      (_cur_y), A                 ; from the top of the screen, I put it in another
+;                                             ; variable so I dont have to divide E by 16 and to do
+;                                             ; the OR with LCD_EI_GD_ADDR every time
+; _draw_bricks_loop:
+;         ld      H, sprite_null/256          ; Get sprite table start (it starts at Y=3 of the
+;                                             ; sprite, and its 256-aligned)
+;
+;         ld      A, (DE)                     ; Get tile to draw
+;
+;         sla     A                           ; Multiply the ID by 4 to get the offset of address of
+;         sla     A                           ; sprite.
+;         ld      L, A                        ; So now we have address of sprite in HL
+;
+;         ld      C, IO_LCD_W_MEM             ; IO device
+;         ld      B, 4                        ; Sprite height
+; _draw_bricks_line_loop:
+;         call    lcd_wait
+;         ld      A, (_cur_y)                 ; Set Y address, already in OR with flag
+;         add     B
+;         dec     A                           ; I dont know why I have to do this
+;         out     IO_LCD_W_INSTR, A
+;         call    lcd_wait
+;         ld      A, E                        ; Set X address, I have to modulo by 16 and OR with flag
+;         and     A, 0b00001111
+;         or      LCD_EI_GD_ADDR
+;         out     IO_LCD_W_INSTR, A
+;         call    lcd_wait
+;         outd                                ; Send to IO dev C, contents of (HL), decrement HL and B
+;         jr      NZ, _draw_bricks_line_loop
+; ; End of loop
+;         inc     E                           ; Increment address
+;
+;         ld      A, 0b00001111               ; See if E is multiple of 16 meaning we went down a line
+;         and     E
+;         jr      NZ, _draw_bricks_loop       ; Loop if we didnt reach end of line
+;         ld      A, (_cur_y)                 ; Add 5 to (_cur_y)
+;         add     A, 5
+;         ld      (_cur_y), A
+;         ld      A, 128                      ; See if E reached 128, meaning we alreade drew 8 lines
+;         cp      E
+;         jr      NZ, _draw_bricks_loop
+;         ret
 
 
 ; Args:
@@ -378,7 +430,7 @@ _move_ball_y_up:
         ret     Z
         inc     (IX+BALL_Y)                 ; Revert the going up
         res     0, (IX+BALL_DIRY)           ; Store that ball is going down
-        call    draw_bricks                 ; TODO: Draw single brick
+        ; call    draw_bricks                 ; TODO: Draw single brick
         jr      _move_ball_y_down           ; Move down
 
 _move_ball_y_down:
@@ -388,7 +440,7 @@ _move_ball_y_down:
         ret     Z
         dec     (IX+BALL_Y)                 ; Revert the going down
         set     0, (IX+BALL_DIRY)           ; Store that ball is going up
-        call    draw_bricks                 ; TODO: Draw single brick
+        ; call    draw_bricks                 ; TODO: Draw single brick
         jr      _move_ball_y_up             ; Move up
 
 
@@ -420,7 +472,7 @@ _move_ball_x_left:
         ret     Z
         inc     (IX+BALL_X)                 ; Revert the going left
         res     0, (IX+BALL_DIRX)           ; Store that ball is going right
-        call    draw_bricks
+        ; call    draw_bricks
         jr      _move_ball_x_right          ; Move right
 
 _move_ball_x_right:
@@ -430,7 +482,7 @@ _move_ball_x_right:
         ret     Z
         dec     (IX+BALL_X)                 ; Revert the going right
         set     0, (IX+BALL_DIRX)           ; Store that ball is going left
-        call    draw_bricks
+        ; call    draw_bricks
         jr      _move_ball_x_left           ; Move left
 
 
@@ -462,139 +514,140 @@ _move_ball_up:
         ret
 
 
-; Args:
-; - B: Byte
-; - D: Y address
-; - E: X address
-; Ret:
-; - Nothing
-; Affects:
-; - A
-draw_byte:
-        call    lcd_wait
-        ld      A, D                        ; Write Y address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, E                        ; Write X address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, B                        ; Write sprite line
-        out     IO_LCD_W_MEM, A
-        ret
-
-; Args:
-; - IX: Ball struct
-; - C: If bit 0 = 0, will draw what is on (HL), which should be sprite_air so nothing is drawn
-; Ret:
-; - Nothing
-; Affects:
-; - All
-draw_ball:
-
-        ld      IX, ball_struct
-        ld      D, (IX+BALL_Y)
-        ld      E, (IX+BALL_X)
-        ld      A, 0b00000111               ; A will hold the modulo 8 of X position
-        and     E
-
-        bit     0, C                        ; If A is zero, we will draw what (HL) has
-        jr      Z, _draw_ball_get_x
-        ld      H, lut_ball/255             ; In (HL) get line to draw in LUT, lut_ball is
-                                            ; 256-aligned.
-        ld      L, A                        ; Put modulo of X position in A
-
-_draw_ball_get_x:
-        srl     E                           ; E will hold the X in tiles, which is X/8
-        srl     E
-        srl     E
-
-        cp      7                           ; If X is modulo 7, we have to draw two tiles
-        jr      Z, _draw_ball_wrapped
-
-_draw_ball_normal:
-        ld      B, (HL)                     ; Draw sprite in DE
-        call    draw_byte
-        inc     D                           ; Now do it again one line below
-        call    draw_byte
-        ret
-
-_draw_ball_wrapped:
-        ld      B, C                        ; Draw one pixel in the right in DE, or nothing if C=0
-        call    draw_byte
-        call    lcd_wait
-        rrc     C                           ; Draw one pixel in the left in the tile in the right if
-        ld      A, C                        ; C = 1
-        out     IO_LCD_W_MEM, A
-        inc     D                           ; Now do it again one line below
-        call    draw_byte
-        call    lcd_wait
-        ld      A, C
-        out     IO_LCD_W_MEM, A
-        ret
+; ; Args:
+; ; - B: Byte
+; ; - D: Y address
+; ; - E: X address
+; ; Ret:
+; ; - Nothing
+; ; Affects:
+; ; - A
+; draw_byte:
+;         call    lcd_wait
+;         ld      A, D                        ; Write Y address
+;         or      LCD_EI_GD_ADDR
+;         out     IO_LCD_W_INSTR, A
+;         call    lcd_wait
+;         ld      A, E                        ; Write X address
+;         or      LCD_EI_GD_ADDR
+;         out     IO_LCD_W_INSTR, A
+;         call    lcd_wait
+;         ld      A, B                        ; Write sprite line
+;         out     IO_LCD_W_MEM, A
+;         ret
 
 
-; Args:
-; - Nothing
-; Ret:
-; - Nothing
-; Affects:
-; - All
-draw_pad:
-        ld      C, IO_LCD_W_MEM             ; IO device
-        ld      IX, sprite_pad              ; Sprite line should be in IX and IX+4 for right edge
-        ld      H, 0                        ; Line number
+; ; Args:
+; ; - IX: Ball struct
+; ; - C: If bit 0 = 0, will draw what is on (HL), which should be sprite_air so nothing is drawn
+; ; Ret:
+; ; - Nothing
+; ; Affects:
+; ; - All
+; draw_ball:
+;
+;         ld      IX, ball_struct
+;         ld      D, (IX+BALL_Y)
+;         ld      E, (IX+BALL_X)
+;         ld      A, 0b00000111               ; A will hold the modulo 8 of X position
+;         and     E
+;
+;         bit     0, C                        ; If A is zero, we will draw what (HL) has
+;         jr      Z, _draw_ball_get_x
+;         ld      H, lut_ball/255             ; In (HL) get line to draw in LUT, lut_ball is
+;                                             ; 256-aligned.
+;         ld      L, A                        ; Put modulo of X position in A
+;
+; _draw_ball_get_x:
+;         srl     E                           ; E will hold the X in tiles, which is X/8
+;         srl     E
+;         srl     E
+;
+;         cp      7                           ; If X is modulo 7, we have to draw two tiles
+;         jr      Z, _draw_ball_wrapped
+;
+; _draw_ball_normal:
+;         ld      B, (HL)                     ; Draw sprite in DE
+;         call    draw_byte
+;         inc     D                           ; Now do it again one line below
+;         call    draw_byte
+;         ret
+;
+; _draw_ball_wrapped:
+;         ld      B, C                        ; Draw one pixel in the right in DE, or nothing if C=0
+;         call    draw_byte
+;         call    lcd_wait
+;         rrc     C                           ; Draw one pixel in the left in the tile in the right if
+;         ld      A, C                        ; C = 1
+;         out     IO_LCD_W_MEM, A
+;         inc     D                           ; Now do it again one line below
+;         call    draw_byte
+;         call    lcd_wait
+;         ld      A, C
+;         out     IO_LCD_W_MEM, A
+;         ret
 
-        ld      A, (pad_x)                  ; Get pad_x / 8 in L
-        ld      L, A
-        srl     L
-        srl     L
-        srl     L
 
-_draw_pad_line:
-        ld      A, (pad_x)                  ; Get pad_x modulo 8 in B
-        and     0b00000111
-        ld      B, A
-
-        call    lcd_wait
-        ld      A, 60                       ; Write Y address
-        add     H
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-        call    lcd_wait
-        ld      A, L                        ; Write X address
-        or      LCD_EI_GD_ADDR
-        out     IO_LCD_W_INSTR, A
-
-        ld      D, (IX)                     ; Left edge
-        ld      E, (IX+4)                   ; Right edge
-
-        ld      A, 0                        ; Skip shifting if B=0
-        cp      B
-        jr      Z, _draw_pad_shift_end
-        xor     A                           ; Clear the third tile, reset carry for rotations below
-_draw_pad_shift_loop:
-        rr      D                           ; Shift right first tile
-        rr      E                           ; Shift right second tile, repeating b7 and carrying b0
-        rra                                 ; Shift carry into A for third tile
-        djnz    _draw_pad_shift_loop
-_draw_pad_shift_end:
-        ld      B, A
-
-        call    lcd_wait
-        out     (C), D
-        call    lcd_wait
-        out     (C), E
-        call    lcd_wait
-        out     (C), B
-
-        inc     IX                          ; Increment pointer to sprite line
-        inc     H                           ; Increment counter of lines drawn
-        ld      A, 4                        ; Loop if we drew less than 4 lines
-        cp      H
-        jr      NZ, _draw_pad_line
-        ret
+; ; Args:
+; ; - Nothing
+; ; Ret:
+; ; - Nothing
+; ; Affects:
+; ; - All
+; draw_pad:
+;         ld      C, IO_LCD_W_MEM             ; IO device
+;         ld      IX, sprite_pad              ; Sprite line should be in IX and IX+4 for right edge
+;         ld      H, 0                        ; Line number
+;
+;         ld      A, (pad_x)                  ; Get pad_x / 8 in L
+;         ld      L, A
+;         srl     L
+;         srl     L
+;         srl     L
+;
+; _draw_pad_line:
+;         ld      A, (pad_x)                  ; Get pad_x modulo 8 in B
+;         and     0b00000111
+;         ld      B, A
+;
+;         call    lcd_wait
+;         ld      A, 60                       ; Write Y address
+;         add     H
+;         or      LCD_EI_GD_ADDR
+;         out     IO_LCD_W_INSTR, A
+;         call    lcd_wait
+;         ld      A, L                        ; Write X address
+;         or      LCD_EI_GD_ADDR
+;         out     IO_LCD_W_INSTR, A
+;
+;         ld      D, (IX)                     ; Left edge
+;         ld      E, (IX+4)                   ; Right edge
+;
+;         ld      A, 0                        ; Skip shifting if B=0
+;         cp      B
+;         jr      Z, _draw_pad_shift_end
+;         xor     A                           ; Clear the third tile, reset carry for rotations below
+; _draw_pad_shift_loop:
+;         rr      D                           ; Shift right first tile
+;         rr      E                           ; Shift right second tile, repeating b7 and carrying b0
+;         rra                                 ; Shift carry into A for third tile
+;         djnz    _draw_pad_shift_loop
+; _draw_pad_shift_end:
+;         ld      B, A
+;
+;         call    lcd_wait
+;         out     (C), D
+;         call    lcd_wait
+;         out     (C), E
+;         call    lcd_wait
+;         out     (C), B
+;
+;         inc     IX                          ; Increment pointer to sprite line
+;         inc     H                           ; Increment counter of lines drawn
+;         ld      A, 4                        ; Loop if we drew less than 4 lines
+;         cp      H
+;         jr      NZ, _draw_pad_line
+;         ret
 
 
 ; Levels in ROM. Each line of bricks is 16 bytes, and there are max 8 lines of 5 px tall.
@@ -638,32 +691,32 @@ lvl_3:          db      _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, 
 ; sprite is 256-aligned so I can get the brick sprites as a LUT
 
                 .align  0x0100
-sprite_null:    db      0b00000000
-TILE_NULL:      equ     0
+; sprite_null:    db      0b00000000
+; TILE_NULL:      equ     0
 
-                db      0b00000000
-                db      0b00000000
-                db      0b00000000
+TILE_AIR:       equ     0
 sprite_air:     db      0b00000000
-TILE_AIR:       equ     1
+                db      0b00000000
+                db      0b00000000
+                db      0b00000000
 
-                db      0b01111100
+TILE_BR0:       equ     1
+sprite_br0:     db      0b01111100
                 db      0b10000010
                 db      0b10111110
-sprite_br0:     db      0b01111100
-TILE_BR0:       equ     2
+                db      0b01111100
 
-                db      0b01101100
+TILE_BR1:       equ     2
+sprite_br1:     db      0b01101100
                 db      0b10010010
                 db      0b10110110
-sprite_br1:     db      0b01101100
-TILE_BR1:       equ     3
+                db      0b01101100
 
-                db      0b01111100
-                db      0b11111110
-                db      0b11111110
+TILE_BR2:       equ     3
 sprite_br2:     db      0b01111100
-TILE_BR2:       equ     4
+                db      0b11111110
+                db      0b11111110
+                db      0b01111100
 
 sprite_pad:     db      0b00111111      ; Left edge
                 db      0b01111111

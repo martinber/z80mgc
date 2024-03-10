@@ -4,7 +4,7 @@ use crate::lcd;
 // use gdk::prelude::*;
 
 
-pub const DEBUG_ADDR: usize = 0x8000; // Location of debug flag in RAM
+pub const DEBUG_ADDR: usize = 0x8400; // Location of debug flag in RAM
 
 
 pub struct MgcMachine {

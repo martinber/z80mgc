@@ -101,8 +101,10 @@ lcd_wait:
 ; - HL: Address of start of sprite data
 ; Affects:
 ; - BC
-; - DE
 ; - HL
+; Returns:
+; - DE: Framebuffer address of position just below where the sprite was copied
+; - HL: Sprite address of position just below where the sprite data was located
 ; Draws into the framebuffer
 copy_sprite:
         ld      B, 0                        ; Because BC will be the counter of bytes to copy
@@ -136,9 +138,25 @@ calc_fbuf_addr:
         sub     E
         ld      D, A
 
-        set     7, D                        ; Framebuffer is always at 0x8001, instead of adding
-        inc     DE                          ; 0x8001 to DE I set bit 7 of D and add 1
-        ret
+        set     7, D                        ; Framebuffer is always at 0x8000, instead of adding
+        ret                                 ; 0x8000 to DE I set bit 7 of D
+
+
+; Args:
+; - None
+; Ret:
+; - None
+; Affects:
+; - B
+; - DE
+; - HL
+clr_fbuf:
+        ld      BC, FBUF_SIZE           ; Amount of bytes to copy
+        ld      HL, 0x8000              ; First byte of framebuffer
+        ld      DE, 0x8001              ; Second byte of framebuffer
+        ld      (HL), 0                 ; Clear fist byte of framebuffer
+        ldir                            ; Copy from HL to DE, incrementing and stopping when BC
+                                        ; reaches zeoo
 
 
 ; Args:
