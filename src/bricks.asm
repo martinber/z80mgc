@@ -27,6 +27,8 @@ reset:
         out     IO_LCD_W_INSTR, A
         call    lcd_clr_graphics        ; Clear graphics
 
+        call    clr_fbuf
+
         ld      BC, 128                 ; Copy 128 bytes of level data to (tiles)
         ld      HL, lvl_1
         ld      DE, tiles
@@ -50,7 +52,6 @@ reset:
 
 _loop:
         halt
-        jp      _loop
 
         ; ld      A, (timer_0)            ; Continue waiting if less than 2 ticks passed
         ; and     0b00000001
@@ -62,6 +63,10 @@ _loop:
         call    pad_collide             ; Collide with pad
 
         call    move_pad
+        call    draw_pad
+
+        ; TODO: Only draw lines with updates
+        call    disp_fbuf
 
         jr      _loop
 
@@ -128,64 +133,6 @@ _draw_bricks_loop_skip:
 
         jr      NZ, _draw_bricks_loop_col   ; If we didn't go over last column, loop new column
         ret
-
-
-; ; Args:
-; ; - Nothing
-; ; Ret:
-; ; - Nothing
-; ; Affects:
-; ; - All
-; draw_bricks:
-;         ld      D, tiles/255                ; DE holds tile memory address. Table is 256-aligned, so
-;         ld      E, 0                        ; D will be high byte of table start address and the low
-;                                             ; will be the offset or actual position of the
-;                                             ; brick/tile. To get the Y position I can use E/16 and
-;                                             ; the remainder is the X position
-;
-;         ld      A, 0 | LCD_EI_GD_ADDR       ; Holds Y coordinate in pixels of the bottom of the tile
-;         ld      (_cur_y), A                 ; from the top of the screen, I put it in another
-;                                             ; variable so I dont have to divide E by 16 and to do
-;                                             ; the OR with LCD_EI_GD_ADDR every time
-; _draw_bricks_loop:
-;         ld      H, sprite_null/256          ; Get sprite table start (it starts at Y=3 of the
-;                                             ; sprite, and its 256-aligned)
-;
-;         ld      A, (DE)                     ; Get tile to draw
-;
-;         sla     A                           ; Multiply the ID by 4 to get the offset of address of
-;         sla     A                           ; sprite.
-;         ld      L, A                        ; So now we have address of sprite in HL
-;
-;         ld      C, IO_LCD_W_MEM             ; IO device
-;         ld      B, 4                        ; Sprite height
-; _draw_bricks_line_loop:
-;         call    lcd_wait
-;         ld      A, (_cur_y)                 ; Set Y address, already in OR with flag
-;         add     B
-;         dec     A                           ; I dont know why I have to do this
-;         out     IO_LCD_W_INSTR, A
-;         call    lcd_wait
-;         ld      A, E                        ; Set X address, I have to modulo by 16 and OR with flag
-;         and     A, 0b00001111
-;         or      LCD_EI_GD_ADDR
-;         out     IO_LCD_W_INSTR, A
-;         call    lcd_wait
-;         outd                                ; Send to IO dev C, contents of (HL), decrement HL and B
-;         jr      NZ, _draw_bricks_line_loop
-; ; End of loop
-;         inc     E                           ; Increment address
-;
-;         ld      A, 0b00001111               ; See if E is multiple of 16 meaning we went down a line
-;         and     E
-;         jr      NZ, _draw_bricks_loop       ; Loop if we didnt reach end of line
-;         ld      A, (_cur_y)                 ; Add 5 to (_cur_y)
-;         add     A, 5
-;         ld      (_cur_y), A
-;         ld      A, 128                      ; See if E reached 128, meaning we alreade drew 8 lines
-;         cp      E
-;         jr      NZ, _draw_bricks_loop
-;         ret
 
 
 ; Args:
@@ -380,9 +327,9 @@ move_pad:
         ld      B, (HL)
         in      A, IO_BUT_R                 ; Load button states in A
         bit     BUTTON_L, A                 ; Move if button was pressed
-        jr      NZ, _move_pad_left
+        jr      Z, _move_pad_left
         bit     BUTTON_R, A
-        jr      NZ, _move_pad_right
+        jr      Z, _move_pad_right
         ret
 
 _move_pad_right:
@@ -588,6 +535,66 @@ _move_ball_up:
 ;         ret
 
 
+; Args:
+; - Nothing
+; Ret:
+; - Nothing
+; Affects:
+; - All
+draw_pad:
+        ld      A, (pad_x)                  ; Get pad_x modulo 8 in B
+        and     0b00000111
+        ld      B, A
+
+        ld      HL, sprite_pad              ; Get correct shift of left pad sprite
+        cp      0
+        jr      Z, _draw_pad_shift_end
+        ld      DE, 12
+_draw_pad_shift:
+        add     HL, DE
+        djnz    _draw_pad_shift
+_draw_pad_shift_end:                        ; Now HL has address of correct left pad sprite
+
+        ld      A, (pad_x)                  ; Get pad_x / 8 in E
+        ld      E, A
+        srl     E
+        srl     E
+        srl     E
+
+        ld      A, 60
+        call    calc_fbuf_addr              ; Get fbuf address in DE
+
+        ; TODO: I have to add some tiles if the pad is larger than 3 tiles. And the position of the
+        ; added tiles is after left pad or middle pad depending if modulo 8 of (pad_x) is bigger
+        ; than 4
+
+        ld      C, 4
+        call    copy_sprite                 ; Draw left pad sprite
+
+        ld      A, E                        ; Add 60 to fbuf address to go one tile right and 4 up
+        add     A, 60                       ; First add 60 to LSB
+        ld      E, A
+        ld      A, D
+        adc     A, 0                        ; And if there was carry, add it to MSB
+        ld      D, A
+
+        ld      C, 4
+        call    copy_sprite                 ; Draw middle pad sprite
+
+        ld      A, E                        ; Add 60 to fbuf address to go one tile right and 4 up
+        add     A, 60
+        ld      E, A
+        ld      A, D
+        adc     A, 0
+        ld      D, A
+
+        ld      C, 4
+        call    copy_sprite                 ; Draw right pad sprite
+
+        ret
+
+
+
 ; ; Args:
 ; ; - Nothing
 ; ; Ret:
@@ -718,15 +725,119 @@ sprite_br2:     db      0b01111100
                 db      0b11111110
                 db      0b01111100
 
-sprite_pad:     db      0b00111111      ; Left edge
+; sprite_pad:     db      0b00111111      ; Left edge
+;                 db      0b01111111
+;                 db      0b01100000
+;                 db      0b00111111
+;
+;                 db      0b11111100      ; Right edge
+;                 db      0b11110110
+;                 db      0b00000110
+;                 db      0b11111100
+
+sprite_pad:     db      0b00111111                          ; Left tile
                 db      0b01111111
                 db      0b01100000
                 db      0b00111111
+                db                0b11111100                ; Middle tile
+                db                0b11110110
+                db                0b00000110
+                db                0b11111100
+                db                          0b00000000      ; Right tile
+                db                          0b00000000
+                db                          0b00000000
+                db                          0b00000000
 
-                db      0b11111100      ; Right edge
-                db      0b11110110
+                db      0b00011111                          ; Now the same for each X offset
+                db      0b00111111
+                db      0b00110000
+                db      0b00011111
+                db                0b11111110
+                db                0b11111011
+                db                0b00000011
+                db                0b11111110
+                db                          0b00000000
+                db                          0b00000000
+                db                          0b00000000
+                db                          0b00000000
+
+                db      0b00001111
+                db      0b00011111
+                db      0b00011000
+                db      0b00001111
+                db                0b11111111
+                db                0b11111101
+                db                0b00000001
+                db                0b11111111
+                db                          0b00000000
+                db                          0b10000000
+                db                          0b10000000
+                db                          0b00000000
+
+                db      0b00000111
+                db      0b00001111
+                db      0b00001100
+                db      0b00000111
+                db                0b11111111
+                db                0b11111110
+                db                0b00000000
+                db                0b11111111
+                db                          0b10000000
+                db                          0b11000000
+                db                          0b11000000
+                db                          0b10000000
+
+                db      0b00000011
+                db      0b00000111
                 db      0b00000110
-                db      0b11111100
+                db      0b00000011
+                db                0b11111111
+                db                0b11111111
+                db                0b00000000
+                db                0b11111111
+                db                          0b11000000
+                db                          0b01100000
+                db                          0b01100000
+                db                          0b11000000
+
+                db      0b00000001
+                db      0b00000011
+                db      0b00000011
+                db      0b00000001
+                db                0b11111111
+                db                0b11111111
+                db                0b00000000
+                db                0b11111111
+                db                          0b11100000
+                db                          0b10110000
+                db                          0b00110000
+                db                          0b11100000
+
+                db      0b00000000
+                db      0b00000001
+                db      0b00000001
+                db      0b00000000
+                db                0b11111111
+                db                0b11111111
+                db                0b10000000
+                db                0b11111111
+                db                          0b11110000
+                db                          0b11011000
+                db                          0b00011000
+                db                          0b11110000
+
+                db      0b00000000
+                db      0b00000000
+                db      0b00000000
+                db      0b00000000
+                db                0b01111111
+                db                0b11111111
+                db                0b11000000
+                db                0b01111111
+                db                          0b11111000
+                db                          0b11101100
+                db                          0b00001100
+                db                          0b11111000
 
                 .align  0x0100
 lut_ball:       db      0b11000000      ; This is a look up table for ball positions modulo 0 to 6
