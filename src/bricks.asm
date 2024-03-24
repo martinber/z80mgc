@@ -9,7 +9,6 @@ FIELD_H:        equ     64
 ; Init
 bricks_start::
 reset:
-        ld      SP, stack+STACK_SIZE    ; Set stack
         call    lcd_wait                ; Init LCD
         ld      A, LCD_BI_SET_8_B
         out     IO_LCD_W_INSTR, A
@@ -27,19 +26,28 @@ reset:
         out     IO_LCD_W_INSTR, A
         call    lcd_clr_graphics        ; Clear graphics
 
-        call    clr_fbuf
+        ld      HL, lvl_1               ; Set level 1
+        ld      (cur_lvl), HL
+
+new_level:                              ; When passing a level continue from here
 
         ld      BC, 128                 ; Copy 128 bytes of level data to (tiles)
-        ld      HL, lvl_1
+        ld      HL, (cur_lvl)
         ld      DE, tiles
         ldir
 
+continue:                               ; When losing a life we continue from here
+
+        ld      SP, stack+STACK_SIZE    ; Set stack
+
+        call    clr_fbuf
+
         ld      IX, ball_struct         ; Init ball
-        ld      (IX+BALL_X), 63
-        ld      (IX+BALL_Y), 0
-        ld      (IX+BALL_VELY), 30
-        ld      (IX+BALL_VELX), 60
-        ld      (IX+BALL_DIRX), 1
+        ld      (IX+BALL_X), 64
+        ld      (IX+BALL_Y), 60
+        ld      (IX+BALL_VELY), 50
+        ld      (IX+BALL_VELX), 40
+        ld      (IX+BALL_DIRX), 0
         ld      (IX+BALL_DIRY), 1
 
         ld      A, 56                   ; Init pad
@@ -53,9 +61,9 @@ reset:
 _loop:
         halt
 
-        ; ld      A, (timer_0)            ; Continue waiting if less than 2 ticks passed
-        ; and     0b00000111
-        ; jr      NZ, _loop
+        ld      A, (timer_0)            ; Continue waiting if less than 2 ticks passed
+        and     0b00000001
+        jr      NZ, _loop
 
         call    move_pad
 
@@ -175,6 +183,14 @@ pad_collide:
         sub     C
         ret     M
 
+        ld      A, (IX+BALL_VELY)           ; Increment speed until max 100
+        add     5
+        cp      100
+        jp      M, _pad_collide_continue
+        ld      A, 100
+_pad_collide_continue:
+        ld      (IX+BALL_VELY), A
+
         ld      A, (pad_w)                  ; Get middle position of pad: pad_left_x + pad_w/2
         sra     A
         add     D
@@ -222,6 +238,8 @@ _pad_collide_calc_vx_neg:
         add     C                           ; Add offset to X speed
         add     C                           ; Add offset to X speed
         add     C                           ; Add offset to X speed
+        add     C                           ; Add offset to X speed
+        add     C                           ; Add offset to X speed
         jp      M, _pad_collide_set_vx_pos  ; Invert if it became negative
         ld      (IX+BALL_VELX), A
         ret
@@ -254,14 +272,9 @@ _pad_collide_set_vx_neg:
 ; - HL: Tile memory address
 ; Affects:
 ; - BC
-; The ball has 4 corners (UL, UR, LL, LR). The corners used for collision detection are LL or LR
-; depending if the ball is going left or right. Upper corners are not used because the bricks are
-; 5px tall but the sprite is 4px tall, so using only LL and LR work out. Another detail is that when
-; ball is going direction down-right and we check only LR, it will clip if the collission only
-; happens in UR, but since the bricks have no graphics in the bottom part then this cliiping gives
-; no problems
-; TODO: Should check collission in LR px and if the modulo is 0 then also directly check the tile in
-; the left
+; The ball has 4 corners (UL, UR, LL, LR). The corner used for collision detection is LL
+; Other corners are not used because the bricks are 5px tall but the sprite is 4px tall, and 8px
+; wide but the sprite is 7px wide.
 brick_collide:
 ; I want to end up with tile number in C, which is equal to (X/8 + Y/5 * 16), so I can go directly
 ; to the tile map
@@ -275,23 +288,18 @@ brick_collide:
         jp      P, _brick_collide_bound     ; ball is 2px wide
 
         ld      C, A                        ; Load X position in C
-        bit     0, (IX+BALL_DIRX)           ; If going right, add 1 so we check right edge of ball
-        jr      NZ, _brick_collide_div_x
-        inc     C
-
-_brick_collide_div_x:
         srl     C                           ; Divide by 8
         srl     C
         srl     C
 
-        ld      A, (IX+BALL_Y)              ; Divide A by 5 by substracting 5 until it becomes
+        ld      A, (IX+BALL_Y)              ; Divide Y by 5 by substracting 5 until it becomes
         ld      B, -1                       ; negative. Result will be in B
 
         cp      0                           ; Check if too far up
         jp      M, _brick_collide_bound
 
-        cp      64                          ; Check if too far down TODO remove
-        jp      P, reset
+        cp      64                          ; Check if too far down
+        jp      P, continue
 
         inc     A                           ; Add 1 so we check bottom edge of ball
 
@@ -300,24 +308,21 @@ _brick_collide_div_y:
         jp      P, _brick_collide_air       ; below to be in (tiles) map
 
 _brick_collide_sub_5:
-        inc     B
+        inc     B                           ; We will have Y/5 in B
         sub     A, 5
         jp      P, _brick_collide_sub_5
 
-        ld      A, 0                        ; Skip adding the 16 if B is already 0, and we will
-        cp      B                           ; Calculate C + 16*B in A
+        sla     B                           ; Calculate X + Y/5 * 16 = C + B * 16
+        sla     B
+        sla     B
+        sla     B
         ld      A, C
-        jr      Z, _brick_collide_ld
-_brick_collide_add_16:
-        add     A, 16
-        djnz    _brick_collide_add_16
+        add     A, B                        ; Now we have the tile position in A
 
-_brick_collide_ld:
         ld      H, tiles/255                ; Load tile in the position
         ld      L, A
         ld      A, (HL)
 
-        ld      (HL), TILE_AIR              ; Remove brick
         ret
 
 _brick_collide_air:
@@ -327,6 +332,7 @@ _brick_collide_air:
 _brick_collide_bound:
         ld      A, 255
         ret
+
 
 
 move_pad:
@@ -384,7 +390,7 @@ _move_ball_y_up:
         ret     Z
         inc     (IX+BALL_Y)                 ; Revert the going up
         res     0, (IX+BALL_DIRY)           ; Store that ball is going down
-        ; call    draw_bricks                 ; TODO: Draw single brick
+        call    delete_brick
         jr      _move_ball_y_down           ; Move down
 
 _move_ball_y_down:
@@ -394,7 +400,7 @@ _move_ball_y_down:
         ret     Z
         dec     (IX+BALL_Y)                 ; Revert the going down
         set     0, (IX+BALL_DIRY)           ; Store that ball is going up
-        ; call    draw_bricks                 ; TODO: Draw single brick
+        call    delete_brick
         jr      _move_ball_y_up             ; Move up
 
 
@@ -426,7 +432,7 @@ _move_ball_x_left:
         ret     Z
         inc     (IX+BALL_X)                 ; Revert the going left
         res     0, (IX+BALL_DIRX)           ; Store that ball is going right
-        ; call    draw_bricks
+        call    delete_brick
         jr      _move_ball_x_right          ; Move right
 
 _move_ball_x_right:
@@ -436,8 +442,65 @@ _move_ball_x_right:
         ret     Z
         dec     (IX+BALL_X)                 ; Revert the going right
         set     0, (IX+BALL_DIRX)           ; Store that ball is going left
-        ; call    draw_bricks
+        call    delete_brick
         jr      _move_ball_x_left           ; Move left
+
+
+; Args:
+; - A: Type of brick that was present. 255 if we collided with screen edge
+; - HL: address in tile map, since the table is 256-aligned, then L is the offset from start
+; Ret:
+; - Nothing
+; Affects:
+; - All
+delete_brick:
+        cp      255
+        ret     Z
+
+        dec     A                           ; Change brick type decrementing hardness
+        dec     (HL)                        ; Also in tile map
+        ld      B, A                        ; Save new brick type in B, could be e.g. TILE_AIR
+
+        ld      A, L                        ; Get X in E. Which is equal to L mod 16
+        and     0b00001111
+        ld      E, A
+
+        srl     L                           ; Save in L the Y position in tiles, which is L / 16
+        srl     L
+        srl     L
+        srl     L
+
+        ld      A, L                        ; Now multiply by 5 to get Y position in pixels
+        add     L
+        add     L
+        add     L
+        add     L
+
+        ld      H, sprite_air/256           ; Get sprite table start. It is 256-aligned
+        sla     B                           ; Multiply the ID by 4 to get the offset of address of
+        sla     B                           ; sprite.
+        ld      L, B                        ; So now we have address of sprite in HL
+
+        call    calc_fbuf_addr              ; Get fbuf address and clear the region
+        ld      C, 4                        ; Could also draw 4px since the 5th is always empty
+        call    copy_sprite
+
+        ld      HL, tiles                   ; Check all tiles, if there is a tile non-zero then
+        ld      B, 16 * 8                   ; the level continues, otherwise we have to start a new
+_delete_brick_read_tiles                    ; level
+        ld      A, (HL)
+        cp      0
+        ret     NZ
+        inc     HL
+        djnz    _delete_brick_read_tiles
+
+        ld      HL, (cur_lvl)               ; Set next level
+        ld      BC, 16 * 8
+        add     HL, BC
+        ld      (cur_lvl), HL
+
+        jp      new_level
+
 
 
 
@@ -737,10 +800,10 @@ sprite_br0:     db      0b00111110
                 db      0b00111110
 
 TILE_BR1:       equ     2
-sprite_br1:     db      0b00110110
+sprite_br1:     db      0b00111110
                 db      0b01001001
                 db      0b01011011
-                db      0b00110110
+                db      0b00111110
 
 TILE_BR2:       equ     3
 sprite_br2:     db      0b00111110
@@ -885,8 +948,7 @@ lut_ball:       db      0b11000000      ; This is a look up table for ball posit
 
 #data BRICKS_RAM, MAIN_RAM_end
 
-lives:          data    1
-level:          data    1
+cur_lvl:        data    2               ; Current level pointer to lvl data
                 align   0x0100
 tiles:          data    16*8            ; Tiles, or state of the bricks of the level
 ball_struct:                            ; Contain several fields accessable with IX

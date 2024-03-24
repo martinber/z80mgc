@@ -156,7 +156,9 @@ clr_fbuf:
         ld      DE, 0x8001              ; Second byte of framebuffer
         ld      (HL), 0                 ; Clear fist byte of framebuffer
         ldir                            ; Copy from HL to DE, incrementing and stopping when BC
-                                        ; reaches zeoo
+                                        ; reaches zero
+
+
 
 
 ; Args:

@@ -38,9 +38,9 @@ boot:
         ld      A, 0                    ; Set debug to 0 or 1
         ld      (debug), A
 
-        call    welcome_start
+        ; call    welcome_start
         ; jp      snake_start
-        ; jp      bricks_start
+        jp      bricks_start
 
 #code MAIN_NMI, 0x066
 
