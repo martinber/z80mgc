@@ -35,8 +35,8 @@ reset:
         ldir
 
         ld      IX, ball_struct         ; Init ball
-        ld      (IX+BALL_X), 52
-        ld      (IX+BALL_Y), 18
+        ld      (IX+BALL_X), 63
+        ld      (IX+BALL_Y), 0
         ld      (IX+BALL_VELY), 30
         ld      (IX+BALL_VELX), 60
         ld      (IX+BALL_DIRX), 1
@@ -54,15 +54,22 @@ _loop:
         halt
 
         ; ld      A, (timer_0)            ; Continue waiting if less than 2 ticks passed
-        ; and     0b00000001
+        ; and     0b00000111
         ; jr      NZ, _loop
+
+        call    move_pad
+
+        ld      C, 0
+        call    draw_ball               ; Delete previous ball graphic
 
         call    move_ball_x             ; Move ball and collide with bricks and walls
         call    move_ball_y
 
         call    pad_collide             ; Collide with pad
 
-        call    move_pad
+        ld      C, 1
+        call    draw_ball               ; Draw ball in new position
+
         call    draw_pad
 
         ; TODO: Only draw lines with updates
@@ -484,55 +491,71 @@ _move_ball_up:
 ;         ret
 
 
-; ; Args:
-; ; - IX: Ball struct
-; ; - C: If bit 0 = 0, will draw what is on (HL), which should be sprite_air so nothing is drawn
-; ; Ret:
-; ; - Nothing
-; ; Affects:
-; ; - All
-; draw_ball:
-;
-;         ld      IX, ball_struct
-;         ld      D, (IX+BALL_Y)
-;         ld      E, (IX+BALL_X)
-;         ld      A, 0b00000111               ; A will hold the modulo 8 of X position
-;         and     E
-;
-;         bit     0, C                        ; If A is zero, we will draw what (HL) has
-;         jr      Z, _draw_ball_get_x
-;         ld      H, lut_ball/255             ; In (HL) get line to draw in LUT, lut_ball is
-;                                             ; 256-aligned.
-;         ld      L, A                        ; Put modulo of X position in A
-;
-; _draw_ball_get_x:
-;         srl     E                           ; E will hold the X in tiles, which is X/8
-;         srl     E
-;         srl     E
-;
-;         cp      7                           ; If X is modulo 7, we have to draw two tiles
-;         jr      Z, _draw_ball_wrapped
-;
-; _draw_ball_normal:
-;         ld      B, (HL)                     ; Draw sprite in DE
-;         call    draw_byte
-;         inc     D                           ; Now do it again one line below
-;         call    draw_byte
-;         ret
-;
-; _draw_ball_wrapped:
-;         ld      B, C                        ; Draw one pixel in the right in DE, or nothing if C=0
-;         call    draw_byte
-;         call    lcd_wait
-;         rrc     C                           ; Draw one pixel in the left in the tile in the right if
-;         ld      A, C                        ; C = 1
-;         out     IO_LCD_W_MEM, A
-;         inc     D                           ; Now do it again one line below
-;         call    draw_byte
-;         call    lcd_wait
-;         ld      A, C
-;         out     IO_LCD_W_MEM, A
-;         ret
+; Args:
+; - IX: Ball struct
+; - C: 0 if we have to erase the ball, or 8 if we want to actually draw it
+; Ret:
+; - Nothing
+; Affects:
+; - All
+draw_ball:
+
+        ld      IX, ball_struct
+        ld      E, (IX+BALL_X)
+        ld      A, 0b00000111               ; A will hold the modulo 8 of X position
+        and     E
+
+        ld      H, sprite_ball/255          ; In (HL) get line to draw in LUT, lut_ball is
+                                            ; 256-aligned.
+        ld      L, A                        ; Put modulo of X position in L to get sprite
+
+        srl     E                           ; E will hold the X in tiles, which is X/8
+        srl     E
+        srl     E
+
+        cp      7                           ; If X is modulo 7, we have to draw two tiles
+        jr      Z, _draw_ball_wrapped
+
+_draw_ball_normal:
+
+        ld      A, (IX+BALL_Y)
+        call    calc_fbuf_addr              ; Get fbuf address in DE
+
+        dec     C                           ; If C == 1, jump, otherwise nothing will be drawn
+        jr      Z, _draw_ball_copy_data
+        ld      HL, sprite_air
+
+_draw_ball_copy_data:
+        ldi                                 ; Copy (DE) <- (HL) and increment DE and HL
+        dec     HL                          ; Decrement HL so we draw again the same sprite
+        ldi
+        ret
+
+_draw_ball_wrapped:
+        dec     C                           ; If C == 0, jump and draw nothing
+        jr      NZ, _draw_ball_wrapped_clr
+        inc     C
+
+        call    _draw_ball_normal           ; Draw left part of ball normally
+
+        ld      HL, 62                      ; Add 63 to DE to move right and 2 up in the fbuf
+        add     HL, DE                      ; We have the fbuf address in HL now
+
+        set     7, (HL)                     ; Set the leftmost bit of the data in the fbuf to paint
+        inc     HL
+        set     7, (HL)                     ; Set the leftmost bit of the data in the fbuf to paint
+        ret
+
+_draw_ball_wrapped_clr:
+        call    _draw_ball_normal           ; Draw left part of ball normally
+
+        ld      HL, 62                      ; Add 63 to DE to move right and 2 up in the fbuf
+        add     HL, DE                      ; We have the fbuf address in HL now
+
+        res     7, (HL)                     ; Unset the leftmost bit of the data in the fbuf
+        inc     HL
+        res     7, (HL)                     ; Unset the leftmost bit of the data in the fbuf
+        ret
 
 
 ; Args:
@@ -708,22 +731,22 @@ sprite_air:     db      0b00000000
                 db      0b00000000
 
 TILE_BR0:       equ     1
-sprite_br0:     db      0b01111100
-                db      0b10000010
-                db      0b10111110
-                db      0b01111100
+sprite_br0:     db      0b00111110
+                db      0b01000001
+                db      0b01011111
+                db      0b00111110
 
 TILE_BR1:       equ     2
-sprite_br1:     db      0b01101100
-                db      0b10010010
-                db      0b10110110
-                db      0b01101100
+sprite_br1:     db      0b00110110
+                db      0b01001001
+                db      0b01011011
+                db      0b00110110
 
 TILE_BR2:       equ     3
-sprite_br2:     db      0b01111100
-                db      0b11111110
-                db      0b11111110
-                db      0b01111100
+sprite_br2:     db      0b00111110
+                db      0b01111111
+                db      0b01111111
+                db      0b00111110
 
 ; sprite_pad:     db      0b00111111      ; Left edge
 ;                 db      0b01111111
@@ -838,6 +861,16 @@ sprite_pad:     db      0b00111111                          ; Left tile
                 db                          0b11101100
                 db                          0b00001100
                 db                          0b11111000
+
+                .align  0x0100
+sprite_ball:    db      0b11000000      ; This is a look up table for ball positions modulo 0 to 7
+                db      0b01100000
+                db      0b00110000
+                db      0b00011000
+                db      0b00001100
+                db      0b00000110
+                db      0b00000011
+                db      0b00000001
 
                 .align  0x0100
 lut_ball:       db      0b11000000      ; This is a look up table for ball positions modulo 0 to 6

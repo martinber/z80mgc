@@ -2,7 +2,8 @@
 
 # My sort of makefile
 
-ZASM=/media/mbernardi/datos/async/extra/software/zasm-4.4.10-Linux64/zasm
+# ZASM=/media/mbernardi/datos/async/extra/software/zasm-4.4.10-Linux64/zasm
+ZASM=/media/mbernardi/datos-ssd/async/extra/software/zasm/zasm-4.4.10-Linux64/zasm
 
 if [[ "$#" -ne 2 ]]; then
     echo "ERROR: Give command and program to use"
