@@ -44,8 +44,8 @@ continue:                               ; When losing a life we continue from he
 
         ld      IX, ball_struct         ; Init ball
         ld      (IX+BALL_X), 64
-        ld      (IX+BALL_Y), 60
-        ld      (IX+BALL_VELY), 50
+        ld      (IX+BALL_Y), 58
+        ld      (IX+BALL_VELY), 40
         ld      (IX+BALL_VELX), 40
         ld      (IX+BALL_DIRX), 0
         ld      (IX+BALL_DIRY), 1
@@ -61,14 +61,17 @@ continue:                               ; When losing a life we continue from he
 _loop:
         halt
 
-        ld      A, (timer_0)            ; Continue waiting if less than 2 ticks passed
-        and     0b00000001
-        jr      NZ, _loop
+        ; ld      A, (timer_0)            ; Continue waiting if less than 2 ticks passed
+        ; and     0b00000001
+        ; jr      NZ, _loop
 
         call    move_pad
 
         ld      C, 0
         call    draw_ball               ; Delete previous ball graphic
+
+        call    disp_fbuf_line          ; HL has fbuf address of ball top left corner
+        call    disp_fbuf_line
 
         call    move_ball_x             ; Move ball and collide with bricks and walls
         call    move_ball_y
@@ -78,10 +81,13 @@ _loop:
         ld      C, 1
         call    draw_ball               ; Draw ball in new position
 
+        call    disp_fbuf_line          ; HL has fbuf address of ball top left corner
+        call    disp_fbuf_line
+
         call    draw_pad
 
         ; TODO: Only draw lines with updates
-        call    disp_fbuf
+        ; call    disp_fbuf
 
         jr      _loop
 
@@ -485,6 +491,13 @@ delete_brick:
         ld      C, 4                        ; Could also draw 4px since the 5th is always empty
         call    copy_sprite
 
+        ld      HL, -4                      ; Draw the 4 lines of fbuf containing the sprite
+        add     HL, DE
+        call    disp_fbuf_line
+        call    disp_fbuf_line
+        call    disp_fbuf_line
+        call    disp_fbuf_line
+
         ld      HL, tiles                   ; Check all tiles, if there is a tile non-zero then
         ld      B, 16 * 8                   ; the level continues, otherwise we have to start a new
 _delete_brick_read_tiles                    ; level
@@ -592,6 +605,11 @@ _draw_ball_copy_data:
         ldi                                 ; Copy (DE) <- (HL) and increment DE and HL
         dec     HL                          ; Decrement HL so we draw again the same sprite
         ldi
+
+        ld      HL, DE                      ; Leave in HL the fbuf address of top left corner
+        dec     HL
+        dec     HL
+
         ret
 
 _draw_ball_wrapped:
@@ -607,6 +625,10 @@ _draw_ball_wrapped:
         set     7, (HL)                     ; Set the leftmost bit of the data in the fbuf to paint
         inc     HL
         set     7, (HL)                     ; Set the leftmost bit of the data in the fbuf to paint
+
+        ld      DE, -65                     ; Substract 65 to HL return fbuf address at and 2 up in
+        add     HL, DE                      ; the fbuf, which ends up being top left corner of ball
+
         ret
 
 _draw_ball_wrapped_clr:
@@ -618,6 +640,10 @@ _draw_ball_wrapped_clr:
         res     7, (HL)                     ; Unset the leftmost bit of the data in the fbuf
         inc     HL
         res     7, (HL)                     ; Unset the leftmost bit of the data in the fbuf
+
+        ld      DE, -65                     ; Substract 65 to HL return fbuf address at and 2 up in
+        add     HL, DE                      ; the fbuf, which ends up being top left corner of ball
+
         ret
 
 
@@ -676,6 +702,12 @@ _draw_pad_shift_end:                        ; Now HL has address of correct left
 
         ld      C, 4
         call    copy_sprite                 ; Draw right pad sprite
+
+        ld      HL, 0x803C                   ; Display last 4 lines of fbuf
+        call    disp_fbuf_line
+        call    disp_fbuf_line
+        call    disp_fbuf_line
+        call    disp_fbuf_line
 
         ret
 
@@ -777,49 +809,25 @@ lvl_3:          db      _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, 
                 db      __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __
                 db      __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __
 
+lvl_4:          db      _2, _2, _2, _2, _2, _2, _2, _2, _2, _2, _2, _2, _2, _2, _2, _2
+                db      _0, __, __, __, __, __, __, __, __, __, __, __, __, __, __, _0
+                db      _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1, _1
+                db      _0, __, _0, __, _0, __, _0, __, _0, __, _0, __, _0, __, _0, __
+                db      _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, _0, _0
+                db      __, _0, __, _0, __, _0, __, _0, __, _0, __, _0, __, _0, __, _0
+                db      __, _0, __, _0, __, _0, __, _0, __, _0, __, _0, __, _0, __, _0
+                db      __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __
+
+lvl_5:          db      _0, _0, _0, __, _0, _0, _0, __, _0, _0, __, __, _0, _0, __, __
+                db      _0, __, __, __, _0, __, _0, __, _0, __, _0, __, _0, __, _0, __
+                db      _0, _0, _0, __, _0, _0, _0, __, _0, __, _0, __, _0, _0, _0, __
+                db      __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __
+                db      __, _0, _0, __, __, __, _0, __, __, _0, _0, _0, __, __, _0, _0
+                db      __, _0, _0, _0, __, _0, _0, _0, __, __, _0, __, __, __, _0, __
+                db      __, _0, __, _0, __, _0, __, _0, __, __, _0, __, __, _0, _0, __
+                db      __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __
+
 ; Bitmaps in ROM
-
-; Sprite null (0) cannot be drawn because of alignment issues. Sprite
-; The tag points to the address of the last line, and the last line of the empty
-; sprite is 256-aligned so I can get the brick sprites as a LUT
-
-                .align  0x0100
-; sprite_null:    db      0b00000000
-; TILE_NULL:      equ     0
-
-TILE_AIR:       equ     0
-sprite_air:     db      0b00000000
-                db      0b00000000
-                db      0b00000000
-                db      0b00000000
-
-TILE_BR0:       equ     1
-sprite_br0:     db      0b00111110
-                db      0b01000001
-                db      0b01011111
-                db      0b00111110
-
-TILE_BR1:       equ     2
-sprite_br1:     db      0b00111110
-                db      0b01001001
-                db      0b01011011
-                db      0b00111110
-
-TILE_BR2:       equ     3
-sprite_br2:     db      0b00111110
-                db      0b01111111
-                db      0b01111111
-                db      0b00111110
-
-; sprite_pad:     db      0b00111111      ; Left edge
-;                 db      0b01111111
-;                 db      0b01100000
-;                 db      0b00111111
-;
-;                 db      0b11111100      ; Right edge
-;                 db      0b11110110
-;                 db      0b00000110
-;                 db      0b11111100
 
 sprite_pad:     db      0b00111111                          ; Left tile
                 db      0b01111111
@@ -924,6 +932,31 @@ sprite_pad:     db      0b00111111                          ; Left tile
                 db                          0b11101100
                 db                          0b00001100
                 db                          0b11111000
+
+                .align  0x0100
+TILE_AIR:       equ     0
+sprite_air:     db      0b00000000
+                db      0b00000000
+                db      0b00000000
+                db      0b00000000
+
+TILE_BR0:       equ     1
+sprite_br0:     db      0b00111110
+                db      0b01000001
+                db      0b01011111
+                db      0b00111110
+
+TILE_BR1:       equ     2
+sprite_br1:     db      0b00111110
+                db      0b01001001
+                db      0b01011011
+                db      0b00111110
+
+TILE_BR2:       equ     3
+sprite_br2:     db      0b00111110
+                db      0b01111111
+                db      0b01111111
+                db      0b00111110
 
                 .align  0x0100
 sprite_ball:    db      0b11000000      ; This is a look up table for ball positions modulo 0 to 7
