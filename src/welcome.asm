@@ -1,6 +1,6 @@
 #code WELCOME_ROM
 
-N_GAMES:        equ     2               ; Max 16 supported
+N_GAMES:        equ     3               ; Max 16 supported
 
 ; Init
 welcome_start::
@@ -124,9 +124,11 @@ start_game:
 welcome_msg:    defb    "==== z80mgc ====",0
 games_names:    defb    " ",16," Snake       ",0    ; Required length: 15 chars + null. 16 is a >
                 defb    " ",16," Bricks      ",0
+                defb    " ",16," Debug       ",0
 
 games_addrs:    defw    snake_start
                 defw    bricks_start
+                defw    debug_start
 
 #data WELCOME_RAM, MAIN_RAM_end
 

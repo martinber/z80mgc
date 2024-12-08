@@ -35,12 +35,12 @@ Specs:
 Working games:
 
 - Snake
+- Brick breaker
 
 Possible future games:
 
-- Brick breaker
-- Frogger
 - Tanks
+- Frogger
 
 Timing
 ------
@@ -162,7 +162,9 @@ Game loop, in order:
 
 - Ball: Draw with OR with shifting/rotation.
 
-### Powerups
+### Old ideas
+
+Powerups:
 
 - Bigger pad
 
@@ -177,8 +179,6 @@ Game loop, in order:
 - Move all bricks downwards
 
 - Extra life
-
-### Old ideas
 
 Will have a DUL (Drawing Update List) containing coordinates and the byte of graphics that will be
 drawn. Some kind of compressed framebuffer. This is used so I can overlap graphics with AND

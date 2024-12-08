@@ -21,9 +21,7 @@ boot:
         ld      A, 0                    ; Set debug to 0 or 1
         ld      (debug), A
 
-        ; call    welcome_start
-        ; jp      snake_start
-        jp      bricks_start
+        call    welcome_start
 
 #code MAIN_NMI, 0x066
 
@@ -48,9 +46,9 @@ nmi:
 ; - B
 ; - E
 lcd_clr_graphics:
-        ld      E, 63                   ; Set Y of last line to clear
+        ld      E, 31                   ; Set Y of last line to clear
 _lcd_clr_graphics_v:
-        ld      B, 16                   ; Set counter for X position
+        ld      B, 32                   ; Set counter for X=16 with 2 byte writes per position
         call    lcd_wait
         ld      A, E                    ; Set Y coordinate to E
         or      A, LCD_EI_GD_ADDR
@@ -113,4 +111,8 @@ tmp_d:          data    1
 
 #local
 #include "bricks.asm"
+#endlocal
+
+#local
+#include "debug.asm"
 #endlocal

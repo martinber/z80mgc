@@ -24,7 +24,7 @@ reset:
         call    lcd_wait                ; Turn on graphics
         ld      A, LCD_EI_SET_8_E_G
         out     IO_LCD_W_INSTR, A
-        call    lcd_clr_graphics        ; Clear graphics
+        ; call    lcd_clr_graphics        ; Clear graphics
 
         ld      HL, lvl_1               ; Set level 1
         ld      (cur_lvl), HL
@@ -61,9 +61,9 @@ continue:                               ; When losing a life we continue from he
 _loop:
         halt
 
-        ; ld      A, (timer_0)            ; Continue waiting if less than 2 ticks passed
-        ; and     0b00000001
-        ; jr      NZ, _loop
+        ld      A, (timer_0)            ; Continue waiting if less than 2 ticks passed
+        and     0b00000001
+        jr      NZ, _loop
 
         call    move_pad
 

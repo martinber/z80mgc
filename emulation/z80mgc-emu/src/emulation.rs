@@ -55,10 +55,10 @@ impl Machine for MgcMachine {
             if self.clicked_down {
                 out &= 0b11111101;
             }
-            if self.clicked_left {
+            if self.clicked_right {
                 out &= 0b11111011;
             }
-            if self.clicked_right {
+            if self.clicked_left {
                 out &= 0b11110111;
             }
             if self.clicked_a {

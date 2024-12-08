@@ -89,8 +89,8 @@ LCD_DD_ADDR_B2:     equ     0x20        ; Offset to second LCD DDRAM buffer.When
 ; The number corresponds to the bit that has to be checked with BIT, buttons are 0 when pressed
 BUTTON_U:       equ     0 ; 0b00000001, Up
 BUTTON_D:       equ     1 ; 0b00000010, Down
-BUTTON_L:       equ     2 ; 0b00000100, Left
-BUTTON_R:       equ     3 ; 0b00001000, Right
+BUTTON_R:       equ     2 ; 0b00000100, Right
+BUTTON_L:       equ     3 ; 0b00001000, Left
 BUTTON_A:       equ     4 ; 0b00010000
 BUTTON_B:       equ     5 ; 0b00100000
 BUTTON_X:       equ     6 ; 0b01000000
